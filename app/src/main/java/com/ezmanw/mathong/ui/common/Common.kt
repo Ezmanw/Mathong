@@ -29,7 +29,7 @@ import com.ezmanw.mathong.game.Layout
 import com.ezmanw.mathong.game.TileKind
 import com.ezmanw.mathong.ui.tiles.GlyphCache
 import com.ezmanw.mathong.ui.tiles.drawTile
-import com.ezmanw.mathong.ui.tiles.palette
+import com.ezmanw.mathong.ui.tiles.TileStyle
 
 @Composable
 fun repository(): Repository = (LocalContext.current.applicationContext as MathongApp).repository
@@ -52,13 +52,13 @@ fun BackTopBar(
 
 /** A single decorative tile. */
 @Composable
-fun TilePreview(kind: TileKind, theme: TileTheme, width: Dp, modifier: Modifier = Modifier, showIndex: Boolean = false, simple: Boolean = false) {
+fun TilePreview(kind: TileKind, style: TileStyle, width: Dp, modifier: Modifier = Modifier) {
     val measurer = rememberTextMeasurer()
     val glyphs = remember(measurer) { GlyphCache(measurer) }
     Canvas(modifier.size(width * 1.15f, width * 1.32f * 1.12f)) {
         val w = size.width / 1.15f
         val h = w * 1.32f
-        drawTile(kind, Offset.Zero, Size(w, h), w * 0.13f, theme.palette(), glyphs, showIndex, simple = simple)
+        drawTile(kind, Offset.Zero, Size(w, h), w * 0.13f, style, glyphs)
     }
 }
 

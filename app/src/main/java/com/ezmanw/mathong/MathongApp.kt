@@ -16,5 +16,7 @@ class MathongApp : Application() {
     override fun onCreate() {
         super.onCreate()
         appScope.launch { repository.syncCustomLayouts() }
+        // Synthesize sound effects off the main thread (only slow on first launch).
+        appScope.launch { sounds }
     }
 }

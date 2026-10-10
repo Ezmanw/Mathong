@@ -4,6 +4,8 @@ import kotlinx.serialization.Serializable
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
+enum class FaceStyle(val label: String) { MATERIAL("Material"), TRADITIONAL("Traditional"), SIMPLE("Simple") }
+
 enum class GameMode(val label: String, val description: String) {
     CLASSIC("Classic", "Timer, score and stars"),
     TIME_ATTACK("Time Attack", "Beat the countdown — every match adds time"),
@@ -31,7 +33,7 @@ data class Settings(
     val smartHints: Boolean = true,
     val autoShuffle: Boolean = false,
     val showMatches: Boolean = false,
-    val simpleFaces: Boolean = false,
+    val faceStyle: FaceStyle = FaceStyle.MATERIAL,
     val dailyReminder: Boolean = false,
     val reminderHour: Int = 19,
     val reminderMinute: Int = 0,

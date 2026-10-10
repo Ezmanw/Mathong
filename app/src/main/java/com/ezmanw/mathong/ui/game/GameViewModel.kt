@@ -268,7 +268,7 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
         val bonusTime = if (s.mode == GameMode.TIME_ATTACK) TIME_PER_MATCH + (combo - 1) * 1000L else 0L
         val newBoard = board.remove(a, b)
         val move = SavedMove(a, b, points)
-        sounds.play(Sfx.MATCH)
+        sounds.play(Sfx.MATCH, level = combo)
         _events.tryEmit(GameEvent.Match(a, b, combo, points))
         _state.update {
             it.copy(

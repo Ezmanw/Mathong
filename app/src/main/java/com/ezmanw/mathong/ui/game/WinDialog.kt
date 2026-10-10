@@ -216,9 +216,10 @@ private class Piece(val x: Float, val speed: Float, val drift: Float, val rot: F
 
 @Composable
 fun Confetti(modifier: Modifier = Modifier) {
-    val pieces = remember {
+    val cs = MaterialTheme.colorScheme
+    val pieces = remember(cs) {
         val r = Random(System.nanoTime())
-        val palette = listOf(Color(0xFFE53935), Color(0xFF43A047), Color(0xFF1E88E5), Color(0xFFFFB300), Color(0xFF8E24AA), Color(0xFF00ACC1))
+        val palette = listOf(cs.primary, cs.tertiary, cs.secondary, cs.primaryContainer, cs.tertiaryContainer, cs.inversePrimary)
         List(120) {
             Piece(r.nextFloat(), 0.25f + r.nextFloat() * 0.5f, r.nextFloat() * 2 - 1, r.nextFloat() * 720, palette.random(r), 6f + r.nextFloat() * 8f, r.nextFloat())
         }

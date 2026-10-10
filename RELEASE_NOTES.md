@@ -1,5 +1,18 @@
-## Mathong v1.6 — Mahjong Solitaire
+## Mathong v1.7 — Mahjong Solitaire
 
+### Material tiles (new default)
+- Flat, **two-tone Material 3 tiles** whose colors come from your theme — including Material You wallpaper colors
+- Suit colors (red, green, blue…) are harmonized toward your theme's primary color, so they always match
+- New Material iconography: two-tone dots and bamboo, a sprout for the 1 of bamboo, compass winds, rounded dragon tiles, flower / sun / leaf / snowflake bonus tiles, pill badges
+- Blocked tiles fade out the Material way instead of being darkened
+- Traditional and Simple faces are still available in Settings → Tile faces
+- Matching two-tone launcher icon and theme-colored confetti
+
+### Natural sounds
+- All sounds rebuilt with modal synthesis: real-sounding ceramic tile ticks and clacks, a wooden knock for blocked tiles, tiles sliding when shuffling
+- Soft marimba notes on each match that climb a pentatonic scale as your combo grows, and a gentle marimba arpeggio when you win
+
+### From v1.6
 ### Snappier tiles
 - Tiles sink the instant your finger touches them, so every tap has immediate feedback
 - Tiles are drawn from a hardware cache (one recorded layer per tile) — much less work per frame

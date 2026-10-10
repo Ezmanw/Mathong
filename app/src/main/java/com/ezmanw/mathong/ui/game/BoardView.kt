@@ -45,7 +45,7 @@ import com.ezmanw.mathong.ui.tiles.GlyphCache
 import com.ezmanw.mathong.ui.tiles.TileImageCache
 import com.ezmanw.mathong.ui.tiles.drawCachedTile
 import com.ezmanw.mathong.ui.tiles.drawTile
-import com.ezmanw.mathong.ui.tiles.palette
+import com.ezmanw.mathong.ui.tiles.rememberTileStyle
 import kotlinx.coroutines.launch
 import kotlin.math.min
 import kotlin.math.sin
@@ -108,7 +108,7 @@ fun BoardView(
 ) {
     val measurer = rememberTextMeasurer(cacheSize = 64)
     val glyphs = remember(measurer) { GlyphCache(measurer) }
-    val palette = settings.tileTheme.palette()
+    val style = rememberTileStyle(settings)
     val colors = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
 
@@ -206,8 +206,8 @@ fun BoardView(
         val metrics = remember(board.layout, w, h) { BoardMetrics(board, w, h, with(density) { 8.dp.toPx() }) }
         metricsHolder[0] = metrics
         val graphicsContext = androidx.compose.ui.platform.LocalGraphicsContext.current
-        val tileImages = remember(metrics, palette, settings.showIndices, settings.simpleFaces, glyphs) {
-            TileImageCache(graphicsContext, glyphs, metrics.faceSize, metrics.depth, palette, settings.showIndices, settings.simpleFaces, density)
+        val tileImages = remember(metrics, style, glyphs) {
+            TileImageCache(graphicsContext, glyphs, metrics.faceSize, metrics.depth, style, density)
         }
         androidx.compose.runtime.DisposableEffect(tileImages) { onDispose { tileImages.release() } }
 
@@ -303,7 +303,7 @@ fun BoardView(
                 if (cacheTiles && settings.fastRendering && dealAlpha >= 0.99f) {
                     drawCachedTile(tileImages, board.kind(i), origin, size, highlight, d)
                 } else {
-                    drawTile(board.kind(i), origin, size, metrics.depth, palette, glyphs, settings.showIndices, highlight, d, dealAlpha, settings.simpleFaces)
+                    drawTile(board.kind(i), origin, size, metrics.depth, style, glyphs, highlight, d, dealAlpha)
                 }
             }
             // Removed tiles fly above the board.
@@ -313,7 +313,7 @@ fun BoardView(
                 val move = (t / 0.6f).coerceAtMost(1f)
                 val fade = ((t - 0.55f) / 0.45f).coerceIn(0f, 1f)
                 val origin = f.from + (f.to - f.from) * move - Offset(0f, metrics.tileH * 0.25f * fade)
-                drawTile(board.kind(i), origin, size, metrics.depth, palette, glyphs, settings.showIndices, colors.primary.copy(alpha = 1f - fade), 0f, 1f - fade, settings.simpleFaces)
+                drawTile(board.kind(i), origin, size, metrics.depth, style, glyphs, colors.primary.copy(alpha = 1f - fade), 0f, 1f - fade)
             }
         }
         if (zoom > 1.01f) {

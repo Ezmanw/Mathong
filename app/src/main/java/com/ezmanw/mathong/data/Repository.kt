@@ -36,6 +36,7 @@ class Repository(private val context: Context) {
         val autoShuffle = booleanPreferencesKey("auto_shuffle")
         val showMatches = booleanPreferencesKey("show_matches")
         val simpleFaces = booleanPreferencesKey("simple_faces")
+        val faceStyle = stringPreferencesKey("face_style")
         val dailyReminder = booleanPreferencesKey("daily_reminder")
         val reminderHour = intPreferencesKey("reminder_hour")
         val reminderMinute = intPreferencesKey("reminder_minute")
@@ -65,7 +66,8 @@ class Repository(private val context: Context) {
             smartHints = p[Keys.smartHints] ?: d.smartHints,
             autoShuffle = p[Keys.autoShuffle] ?: d.autoShuffle,
             showMatches = p[Keys.showMatches] ?: d.showMatches,
-            simpleFaces = p[Keys.simpleFaces] ?: d.simpleFaces,
+            faceStyle = p[Keys.faceStyle]?.let { v -> FaceStyle.entries.firstOrNull { it.name == v } }
+                ?: if (p[Keys.simpleFaces] == true) FaceStyle.SIMPLE else d.faceStyle,
             dailyReminder = p[Keys.dailyReminder] ?: d.dailyReminder,
             reminderHour = p[Keys.reminderHour] ?: d.reminderHour,
             reminderMinute = p[Keys.reminderMinute] ?: d.reminderMinute,
@@ -88,7 +90,7 @@ class Repository(private val context: Context) {
             p[Keys.smartHints] = s.smartHints
             p[Keys.autoShuffle] = s.autoShuffle
             p[Keys.showMatches] = s.showMatches
-            p[Keys.simpleFaces] = s.simpleFaces
+            p[Keys.faceStyle] = s.faceStyle.name
             p[Keys.dailyReminder] = s.dailyReminder
             p[Keys.reminderHour] = s.reminderHour
             p[Keys.reminderMinute] = s.reminderMinute

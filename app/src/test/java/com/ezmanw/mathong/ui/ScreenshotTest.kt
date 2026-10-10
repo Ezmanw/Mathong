@@ -25,7 +25,7 @@ class ScreenshotTest {
     @get:Rule
     val paparazzi = Paparazzi(deviceConfig = DeviceConfig.PIXEL_6, maxPercentDifference = 1.0)
 
-    private fun board(layoutId: String, settings: Settings, removeSome: Int = 0) {
+    private fun board(layoutId: String, settings: Settings, removeSome: Int = 0, dark: Boolean = false) {
         var b = Generator.deal(Layouts.byId(layoutId), 42)
         repeat(removeSome) {
             val m = b.availableMatches().firstOrNull() ?: return@repeat
@@ -33,7 +33,7 @@ class ScreenshotTest {
         }
         val free = b.freeTiles()
         paparazzi.snapshot {
-            MathongTheme(dynamicColor = false) {
+            MathongTheme(themeMode = if (dark) com.ezmanw.mathong.data.ThemeMode.DARK else com.ezmanw.mathong.data.ThemeMode.LIGHT, dynamicColor = false) {
                 Box(Modifier.fillMaxSize().background(boardBrush(settings.background))) {
                     BoardView(b, free.firstOrNull(), null, null, 0, settings, onTap = {}, modifier = Modifier.fillMaxSize(), cacheTiles = false)
                 }
@@ -92,7 +92,39 @@ class ScreenshotTest {
     }
 
     @Test fun turtle() = board("turtle", Settings())
-    @Test fun pyramidFelt() = board("pyramid", Settings(background = BoardBackground.FELT, tileTheme = TileTheme.IVORY), 10)
-    @Test fun pocketSimple() = board("pocket", Settings(simpleFaces = true, tileTheme = TileTheme.AMBER))
+    @Test fun pyramidFelt() = board("pyramid", Settings(background = BoardBackground.FELT, tileTheme = TileTheme.IVORY, faceStyle = com.ezmanw.mathong.data.FaceStyle.TRADITIONAL), 10)
+    @Test fun pocketSimple() = board("pocket", Settings(faceStyle = com.ezmanw.mathong.data.FaceStyle.SIMPLE, tileTheme = TileTheme.AMBER))
+    @Test fun pocketTraditional() = board("pocket", Settings(faceStyle = com.ezmanw.mathong.data.FaceStyle.TRADITIONAL))
+    @Test fun turtleDark() = board("turtle", Settings(themeMode = com.ezmanw.mathong.data.ThemeMode.DARK), dark = true)
+
+    @Test
+    fun materialTileSet() {
+        paparazzi.snapshot {
+            MathongTheme(dynamicColor = false) {
+                TileSet()
+            }
+        }
+    }
+
+    @Test
+    fun materialTileSetDark() {
+        paparazzi.snapshot {
+            MathongTheme(themeMode = com.ezmanw.mathong.data.ThemeMode.DARK, dynamicColor = false) {
+                TileSet()
+            }
+        }
+    }
+
+    @androidx.compose.runtime.Composable
+    private fun TileSet() {
+        val style = com.ezmanw.mathong.ui.tiles.rememberTileStyle(Settings())
+        androidx.compose.foundation.layout.FlowRow(
+            Modifier.fillMaxSize().background(androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerLow).padding(8.dp),
+        ) {
+            (0 until 42).forEach { k ->
+                com.ezmanw.mathong.ui.common.TilePreview(com.ezmanw.mathong.game.TileKind(k), style, 44.dp, Modifier.padding(2.dp))
+            }
+        }
+    }
     @Test fun pocketIndices() = board("pocket", Settings(showIndices = true, tileTheme = TileTheme.SAPPHIRE))
 }

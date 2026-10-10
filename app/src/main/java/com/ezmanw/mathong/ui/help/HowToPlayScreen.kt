@@ -104,8 +104,8 @@ private fun Block(title: String, body: String) {
 @Composable
 private fun Pair(a: TileKind, b: TileKind, s: Settings) {
     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        TilePreview(a, s.tileTheme, 36.dp, showIndex = s.showIndices, simple = s.simpleFaces)
-        TilePreview(b, s.tileTheme, 36.dp, showIndex = s.showIndices, simple = s.simpleFaces)
+        TilePreview(a, com.ezmanw.mathong.ui.tiles.rememberTileStyle(s), 36.dp)
+        TilePreview(b, com.ezmanw.mathong.ui.tiles.rememberTileStyle(s), 36.dp)
     }
 }
 
@@ -114,6 +114,7 @@ private fun Pair(a: TileKind, b: TileKind, s: Settings) {
 private fun SuitRow(name: String, kinds: List<TileKind>, s: Settings) {
     Text(name, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        kinds.forEach { TilePreview(it, s.tileTheme, 30.dp, showIndex = s.showIndices, simple = s.simpleFaces) }
+        val st = com.ezmanw.mathong.ui.tiles.rememberTileStyle(s)
+        kinds.forEach { TilePreview(it, st, 30.dp) }
     }
 }

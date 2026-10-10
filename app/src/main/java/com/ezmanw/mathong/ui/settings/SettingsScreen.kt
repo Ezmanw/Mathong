@@ -46,6 +46,8 @@ import com.ezmanw.mathong.data.BoardBackground
 import com.ezmanw.mathong.data.Settings
 import com.ezmanw.mathong.data.ThemeMode
 import com.ezmanw.mathong.data.TileTheme
+import com.ezmanw.mathong.data.FaceStyle
+import com.ezmanw.mathong.ui.tiles.rememberTileStyle
 import com.ezmanw.mathong.notify.Reminders
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -119,29 +121,69 @@ fun SettingsScreen(onBack: () -> Unit) {
                     SwitchRow("Dynamic color", "Use colors from your wallpaper", s.dynamicColor) { v -> update { it.copy(dynamicColor = v) } }
                 }
 
-                Text("Tile style", Modifier.padding(start = 16.dp, top = 12.dp), style = MaterialTheme.typography.bodyLarge)
+                Text("Tile faces", Modifier.padding(start = 16.dp, top = 12.dp), style = MaterialTheme.typography.bodyLarge)
                 Row(
                     Modifier
                         .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    TileTheme.entries.forEach { t ->
-                        val selected = s.tileTheme == t
+                    FaceStyle.entries.forEach { face ->
+                        val selected = s.faceStyle == face
+                        val preview = rememberTileStyle(s.copy(faceStyle = face))
                         Column(
                             Modifier
                                 .clip(RoundedCornerShape(16.dp))
                                 .border(
-                                    BorderStroke(if (selected) 2.dp else 0.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface),
+                                    BorderStroke(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
                                     RoundedCornerShape(16.dp),
                                 )
-                                .clickable { update { it.copy(tileTheme = t) } }
+                                .clickable { update { it.copy(faceStyle = face) } }
                                 .padding(10.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            TilePreview(TileKind(31), t, 40.dp, showIndex = s.showIndices, simple = s.simpleFaces)
+                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                listOf(4, 22, 27, 31).forEach { TilePreview(TileKind(it), preview, 28.dp) }
+                            }
                             Spacer(Modifier.height(4.dp))
-                            Text(t.label, style = MaterialTheme.typography.labelMedium)
+                            Text(face.label, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+                Text(
+                    if (s.faceStyle == FaceStyle.MATERIAL) "Material tiles take their colors from your theme" + (if (s.dynamicColor) " and wallpaper." else ".")
+                    else "Choose a tile color below.",
+                    Modifier.padding(horizontal = 16.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                if (s.faceStyle != FaceStyle.MATERIAL) {
+                    Text("Tile color", Modifier.padding(start = 16.dp, top = 12.dp), style = MaterialTheme.typography.bodyLarge)
+                    Row(
+                        Modifier
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        TileTheme.entries.forEach { t ->
+                            val selected = s.tileTheme == t
+                            val preview = rememberTileStyle(s.copy(tileTheme = t))
+                            Column(
+                                Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .border(
+                                        BorderStroke(if (selected) 2.dp else 0.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface),
+                                        RoundedCornerShape(16.dp),
+                                    )
+                                    .clickable { update { it.copy(tileTheme = t) } }
+                                    .padding(10.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                TilePreview(TileKind(31), preview, 40.dp)
+                                Spacer(Modifier.height(4.dp))
+                                Text(t.label, style = MaterialTheme.typography.labelMedium)
+                            }
                         }
                     }
                 }
@@ -162,29 +204,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 Box(Modifier.size(18.dp).clip(CircleShape).background(boardBrush(b)))
                             },
                         )
-                    }
-                }
-                Text("Tile faces", Modifier.padding(start = 16.dp, top = 8.dp), style = MaterialTheme.typography.bodyLarge)
-                Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    listOf(false to "Traditional", true to "Simple").forEach { (simple, label) ->
-                        val selected = s.simpleFaces == simple
-                        Column(
-                            Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .border(
-                                    BorderStroke(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
-                                    RoundedCornerShape(16.dp),
-                                )
-                                .clickable { update { it.copy(simpleFaces = simple) } }
-                                .padding(10.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                listOf(22, 27, 32).forEach { TilePreview(TileKind(it), s.tileTheme, 30.dp, simple = simple) }
-                            }
-                            Spacer(Modifier.height(4.dp))
-                            Text(label, style = MaterialTheme.typography.labelMedium)
-                        }
                     }
                 }
                 SwitchRow("Corner labels", "Show a small rank label on every tile", s.showIndices) { v -> update { it.copy(showIndices = v) } }

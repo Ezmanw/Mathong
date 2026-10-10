@@ -1,17 +1,17 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <!-- tile depth -->
-    <path android:fillColor="#FF1C4734"
-        android:pathData="M43,30 h36 a6,6 0 0 1 6,6 v44 a6,6 0 0 1 -6,6 h-36 a6,6 0 0 1 -6,-6 v-44 a6,6 0 0 1 6,-6 z" />
+    <!-- tile base tone -->
+    <path android:fillColor="#FF8FCBAA"
+        android:pathData="M45,31 h32 a9,9 0 0 1 9,9 v40 a9,9 0 0 1 -9,9 h-32 a9,9 0 0 1 -9,-9 v-40 a9,9 0 0 1 9,-9 z" />
     <!-- tile face -->
-    <path android:fillColor="#FFFFF8E7"
-        android:pathData="M39,25 h36 a6,6 0 0 1 6,6 v44 a6,6 0 0 1 -6,6 h-36 a6,6 0 0 1 -6,-6 v-44 a6,6 0 0 1 6,-6 z" />
-    <!-- 中 -->
-    <path android:fillColor="#00000000" android:strokeColor="#FFC62828" android:strokeWidth="5"
-        android:strokeLineJoin="round"
-        android:pathData="M45,43 h24 v17 h-24 z" />
-    <path android:fillColor="#00000000" android:strokeColor="#FFC62828" android:strokeWidth="5"
-        android:strokeLineCap="round"
-        android:pathData="M57,33 v40" />
+    <path android:fillColor="#FFFBFDF9"
+        android:pathData="M40,25 h32 a9,9 0 0 1 9,9 v40 a9,9 0 0 1 -9,9 h-32 a9,9 0 0 1 -9,-9 v-40 a9,9 0 0 1 9,-9 z" />
+    <!-- two-tone red dragon: container square + accent glyph -->
+    <path android:fillColor="#FFFFDAD4"
+        android:pathData="M44,36 h24 a7,7 0 0 1 7,7 v22 a7,7 0 0 1 -7,7 h-24 a7,7 0 0 1 -7,-7 v-22 a7,7 0 0 1 7,-7 z" />
+    <path android:fillColor="#00000000" android:strokeColor="#FFB3261E" android:strokeWidth="4"
+        android:strokeLineJoin="round" android:pathData="M46,47 h20 v12 h-20 z" />
+    <path android:fillColor="#00000000" android:strokeColor="#FFB3261E" android:strokeWidth="4"
+        android:strokeLineCap="round" android:pathData="M56,40 v28" />
 </vector>

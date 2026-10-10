@@ -179,7 +179,7 @@ fun TileKind.shortLabel(): String = when (suit) {
     Suit.SEASON -> "S"
 }
 
-private fun DrawScope.drawIndex(kind: TileKind, o: Offset, s: Size, glyphs: GlyphCache) {
+internal fun DrawScope.drawIndex(kind: TileKind, o: Offset, s: Size, glyphs: GlyphCache) {
     val label = kind.shortLabel()
     val color = when (kind.suit) {
         Suit.DOTS -> Blue; Suit.BAMBOO -> Green; Suit.CHARACTERS -> Red; else -> Ink
@@ -337,20 +337,18 @@ private fun DrawScope.drawSun(c: Offset, r: Float, color: Color) {
 }
 
 /**
- * Draws a full 3D tile. [rect] is the face position; depth extends down-right by [depth].
+ * Draws a full 3D tile. [faceOrigin] is the face position; depth extends down-right by [depth].
  */
 fun DrawScope.drawTile(
     kind: TileKind,
     faceOrigin: Offset,
     size: Size,
     depth: Float,
-    palette: TilePalette,
+    style: TileStyle,
     glyphs: GlyphCache,
-    showIndex: Boolean,
     highlight: Color? = null,
     dim: Float = 0f,
     alpha: Float = 1f,
-    simple: Boolean = false,
 ) {
     if (alpha < 0.99f) {
         if (alpha <= 0.01f) return
@@ -360,10 +358,10 @@ fun DrawScope.drawTile(
             faceOrigin.x + size.width + depth * 2 + pad, faceOrigin.y + size.height + depth * 2 + pad,
         )
         drawContext.canvas.saveLayer(bounds, androidx.compose.ui.graphics.Paint().apply { this.alpha = alpha })
-        drawTileOpaque(kind, faceOrigin, size, depth, palette, glyphs, showIndex, highlight, dim, simple)
+        drawTileOpaque(kind, faceOrigin, size, depth, style, glyphs, highlight, dim)
         drawContext.canvas.restore()
     } else {
-        drawTileOpaque(kind, faceOrigin, size, depth, palette, glyphs, showIndex, highlight, dim, simple)
+        drawTileOpaque(kind, faceOrigin, size, depth, style, glyphs, highlight, dim)
     }
 }
 
@@ -372,60 +370,77 @@ internal fun DrawScope.drawTileOpaque(
     faceOrigin: Offset,
     size: Size,
     depth: Float,
-    palette: TilePalette,
+    style: TileStyle,
     glyphs: GlyphCache,
-    showIndex: Boolean,
     highlight: Color?,
     dim: Float,
-    simple: Boolean,
 ) {
-    val corner = CornerRadius(size.width * 0.12f)
-    // drop shadow
-    drawRoundRect(Color.Black.copy(alpha = 0.18f), faceOrigin + Offset(depth * 1.6f, depth * 1.8f), size, corner)
-    // body layers
-    drawRoundRect(palette.sideDark, faceOrigin + Offset(depth, depth), size, corner)
-    drawRoundRect(palette.side, faceOrigin + Offset(depth * 0.55f, depth * 0.55f), size, corner)
-    drawRoundRect(palette.border, faceOrigin + Offset(depth * 0.2f, depth * 0.2f), size, corner)
-    // face
-    drawRoundRect(
-        Brush.linearGradient(listOf(palette.faceTop, palette.faceBottom), faceOrigin, faceOrigin + Offset(size.width, size.height)),
-        faceOrigin, size, corner,
-    )
-    drawTileFace(kind, faceOrigin, size, glyphs, showIndex, simple)
+    val palette = style.palette
+    val corner = CornerRadius(size.width * style.cornerFraction)
+    if (style.face == com.ezmanw.mathong.data.FaceStyle.MATERIAL) {
+        // Flat, two-tone body: a soft tonal shadow, an edge tone and a darker base tone.
+        drawRoundRect(palette.sideDark.copy(alpha = 0.25f), faceOrigin + Offset(depth * 1.5f, depth * 1.7f), size, corner)
+        drawRoundRect(palette.sideDark, faceOrigin + Offset(depth, depth), size, corner)
+        drawRoundRect(palette.side, faceOrigin + Offset(depth * 0.5f, depth * 0.5f), size, corner)
+        drawRoundRect(palette.faceTop, faceOrigin, size, corner)
+        drawMaterialFace(kind, faceOrigin, size, glyphs, style)
+    } else {
+        // drop shadow
+        drawRoundRect(Color.Black.copy(alpha = 0.18f), faceOrigin + Offset(depth * 1.6f, depth * 1.8f), size, corner)
+        // body layers
+        drawRoundRect(palette.sideDark, faceOrigin + Offset(depth, depth), size, corner)
+        drawRoundRect(palette.side, faceOrigin + Offset(depth * 0.55f, depth * 0.55f), size, corner)
+        drawRoundRect(palette.border, faceOrigin + Offset(depth * 0.2f, depth * 0.2f), size, corner)
+        // face
+        drawRoundRect(
+            Brush.linearGradient(listOf(palette.faceTop, palette.faceBottom), faceOrigin, faceOrigin + Offset(size.width, size.height)),
+            faceOrigin, size, corner,
+        )
+        drawTileFace(kind, faceOrigin, size, glyphs, style.showIndex, style.face == com.ezmanw.mathong.data.FaceStyle.SIMPLE)
+    }
+    drawOverlays(faceOrigin, size, corner, highlight, dim, style)
+}
+
+private fun DrawScope.drawOverlays(faceOrigin: Offset, size: Size, corner: CornerRadius, highlight: Color?, dim: Float, style: TileStyle) {
     if (highlight != null) {
         drawRoundRect(highlight.copy(alpha = 0.28f * highlight.alpha), faceOrigin, size, corner)
         drawRoundRect(highlight, faceOrigin, size, corner, style = Stroke(size.width * 0.07f))
     }
-    if (dim > 0f) drawRoundRect(Color.Black.copy(alpha = dim), faceOrigin, size, corner)
+    if (dim > 0f) {
+        if (style.face == com.ezmanw.mathong.data.FaceStyle.MATERIAL) {
+            // Material "disabled" look: wash the content out toward the face tone.
+            drawRoundRect(style.palette.faceTop.copy(alpha = (dim * 2.6f).coerceAtMost(0.62f)), faceOrigin, size, corner)
+        } else {
+            drawRoundRect(Color.Black.copy(alpha = dim), faceOrigin, size, corner)
+        }
+    }
 }
 
 /**
  * Records each tile's artwork once into a [GraphicsLayer] (a hardware display list) so the
  * board replays one recorded layer per tile per frame instead of issuing dozens of shapes
- * and glyphs. Create a new cache whenever the tile size or appearance settings change, and
- * call [release] when done.
+ * and glyphs. Create a new cache whenever the tile size or style changes, and call
+ * [release] when done.
  */
 class TileImageCache(
     private val graphics: androidx.compose.ui.graphics.GraphicsContext,
     private val glyphs: GlyphCache,
     private val size: Size,
     private val depth: Float,
-    private val palette: TilePalette,
-    private val showIndex: Boolean,
-    private val simple: Boolean,
+    val style: TileStyle,
     private val density: androidx.compose.ui.unit.Density,
 ) {
     private val layers = HashMap<Int, androidx.compose.ui.graphics.layer.GraphicsLayer>()
     /** Extra room around the face for the side, shadow and stroke. */
     private val pad = kotlin.math.ceil(depth * 0.5f).coerceAtLeast(2f)
-    private val w = kotlin.math.ceil(size.width + depth * 1.6f + pad * 2).toInt().coerceAtLeast(1)
-    private val h = kotlin.math.ceil(size.height + depth * 1.8f + pad * 2).toInt().coerceAtLeast(1)
+    private val w = kotlin.math.ceil(size.width + depth * 1.7f + pad * 2).toInt().coerceAtLeast(1)
+    private val h = kotlin.math.ceil(size.height + depth * 1.9f + pad * 2).toInt().coerceAtLeast(1)
 
     fun layer(kind: TileKind): androidx.compose.ui.graphics.layer.GraphicsLayer = layers.getOrPut(kind.id) {
         graphics.createGraphicsLayer().apply {
             topLeft = androidx.compose.ui.unit.IntOffset(-pad.toInt(), -pad.toInt())
             record(density, androidx.compose.ui.unit.LayoutDirection.Ltr, androidx.compose.ui.unit.IntSize(w, h)) {
-                drawTileOpaque(kind, Offset(pad.toInt().toFloat(), pad.toInt().toFloat()), size, depth, palette, glyphs, showIndex, null, 0f, simple)
+                drawTileOpaque(kind, Offset(pad.toInt().toFloat(), pad.toInt().toFloat()), size, depth, style, glyphs, null, 0f)
             }
         }
     }
@@ -448,10 +463,5 @@ fun DrawScope.drawCachedTile(
     translate(faceOrigin.x, faceOrigin.y) {
         drawLayer(cache.layer(kind))
     }
-    val corner = CornerRadius(size.width * 0.12f)
-    if (highlight != null) {
-        drawRoundRect(highlight.copy(alpha = 0.28f * highlight.alpha), faceOrigin, size, corner)
-        drawRoundRect(highlight, faceOrigin, size, corner, style = Stroke(size.width * 0.07f))
-    }
-    if (dim > 0f) drawRoundRect(Color.Black.copy(alpha = dim), faceOrigin, size, corner)
+    drawOverlays(faceOrigin, size, CornerRadius(size.width * cache.style.cornerFraction), highlight, dim, cache.style)
 }

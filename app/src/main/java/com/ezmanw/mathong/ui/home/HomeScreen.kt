@@ -175,12 +175,13 @@ private fun Header(settings: Settings) {
     val bob by rememberInfiniteTransition(label = "bob").animateFloat(
         -1f, 1f, infiniteRepeatable(tween(1800), RepeatMode.Reverse), label = "b",
     )
+    val tileStyle = com.ezmanw.mathong.ui.tiles.rememberTileStyle(settings)
     Column(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(horizontalArrangement = Arrangement.spacedBy((-6).dp), verticalAlignment = Alignment.Bottom) {
             val tiles = listOf(TileKind(31), TileKind(0), TileKind(32), TileKind(9), TileKind(27))
             tiles.forEachIndexed { i, k ->
                 TilePreview(
-                    k, settings.tileTheme, 46.dp, simple = settings.simpleFaces,
+                    k, tileStyle, 46.dp,
                     modifier = Modifier.graphicsLayer {
                         rotationZ = (i - 2) * 6f
                         translationY = ((if (i % 2 == 0) bob else -bob) * 4f - kotlin.math.abs(i - 2) * -6f).dp.toPx()

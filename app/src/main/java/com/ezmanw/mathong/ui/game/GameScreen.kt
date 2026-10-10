@@ -487,7 +487,7 @@ private fun TileInspector(
             shadowElevation = 6.dp,
         ) {
             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                com.ezmanw.mathong.ui.common.TilePreview(kind, settings.tileTheme, 52.dp, showIndex = settings.showIndices, simple = settings.simpleFaces)
+                com.ezmanw.mathong.ui.common.TilePreview(kind, com.ezmanw.mathong.ui.tiles.rememberTileStyle(settings), 52.dp)
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(kind.displayName, style = MaterialTheme.typography.titleMedium)
