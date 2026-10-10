@@ -1,6 +1,14 @@
-## Mathong v1.5 — Mahjong Solitaire
+## Mathong v1.6 — Mahjong Solitaire
 
-### New
+### Snappier tiles
+- Tiles sink the instant your finger touches them, so every tap has immediate feedback
+- Tiles are drawn from a hardware cache (one recorded layer per tile) — much less work per frame
+- The board no longer redraws on every timer tick, and the hint pulse only animates while a hint is showing
+- Near-miss taps on small tiles pick the closest tile
+- (v1.4 already removed the ~300 ms double-tap delay on every tap)
+- New *Fast tile rendering* switch in Settings → Gameplay in case the cache misbehaves on your device
+
+### From v1.5
 - **Share layouts** — send any custom layout as a short `MATHONG1:` code (Editor → ⋮ → Share layout code)
 - **Import layouts** — paste a code in *Choose a layout* (download icon); clipboard codes are detected automatically
 - **Backup & restore** — save statistics, achievements and custom layouts to a file and restore them on a new phone (Settings → Data)

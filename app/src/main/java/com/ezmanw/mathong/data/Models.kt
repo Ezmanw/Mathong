@@ -35,6 +35,7 @@ data class Settings(
     val dailyReminder: Boolean = false,
     val reminderHour: Int = 19,
     val reminderMinute: Int = 0,
+    val fastRendering: Boolean = true,
 )
 
 @Serializable

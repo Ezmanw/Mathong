@@ -35,7 +35,7 @@ class ScreenshotTest {
         paparazzi.snapshot {
             MathongTheme(dynamicColor = false) {
                 Box(Modifier.fillMaxSize().background(boardBrush(settings.background))) {
-                    BoardView(b, free.firstOrNull(), null, null, 0, settings, onTap = {}, modifier = Modifier.fillMaxSize())
+                    BoardView(b, free.firstOrNull(), null, null, 0, settings, onTap = {}, modifier = Modifier.fillMaxSize(), cacheTiles = false)
                 }
             }
         }

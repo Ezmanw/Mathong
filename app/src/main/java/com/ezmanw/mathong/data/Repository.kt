@@ -39,6 +39,7 @@ class Repository(private val context: Context) {
         val dailyReminder = booleanPreferencesKey("daily_reminder")
         val reminderHour = intPreferencesKey("reminder_hour")
         val reminderMinute = intPreferencesKey("reminder_minute")
+        val fastRendering = booleanPreferencesKey("fast_rendering")
         val stats = stringPreferencesKey("stats")
         val savedGame = stringPreferencesKey("saved_game")
         val lastLayout = stringPreferencesKey("last_layout")
@@ -68,6 +69,7 @@ class Repository(private val context: Context) {
             dailyReminder = p[Keys.dailyReminder] ?: d.dailyReminder,
             reminderHour = p[Keys.reminderHour] ?: d.reminderHour,
             reminderMinute = p[Keys.reminderMinute] ?: d.reminderMinute,
+            fastRendering = p[Keys.fastRendering] ?: d.fastRendering,
         )
     }
 
@@ -90,6 +92,7 @@ class Repository(private val context: Context) {
             p[Keys.dailyReminder] = s.dailyReminder
             p[Keys.reminderHour] = s.reminderHour
             p[Keys.reminderMinute] = s.reminderMinute
+            p[Keys.fastRendering] = s.fastRendering
         }
     }
 

@@ -120,6 +120,9 @@ fun GameScreen(
     var menuOpen by remember { mutableStateOf(false) }
     var confirmNew by remember { mutableStateOf(false) }
     var inspect by remember { mutableStateOf<Int?>(null) }
+    // Stable callbacks so timer ticks don't recompose and redraw the board.
+    val onTileTap = remember(vm) { { i: Int -> inspect = null; vm.tapTile(i) } }
+    val onTileLongPress = remember { { i: Int -> inspect = i } }
 
     DisposableEffect(view) {
         view.keepScreenOn = true
@@ -262,8 +265,8 @@ fun GameScreen(
                                         shakeKey = state.shakeKey,
                                         settings = settings,
                                         dealId = state.dealId,
-                                        onTap = { inspect = null; vm.tapTile(it) },
-                                        onLongPress = { inspect = it },
+                                        onTap = onTileTap,
+                                        onLongPress = onTileLongPress,
                                         modifier = Modifier.fillMaxSize(),
                                     )
                                 }

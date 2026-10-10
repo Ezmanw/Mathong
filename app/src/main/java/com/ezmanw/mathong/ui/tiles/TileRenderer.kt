@@ -6,6 +6,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -365,7 +367,7 @@ fun DrawScope.drawTile(
     }
 }
 
-private fun DrawScope.drawTileOpaque(
+internal fun DrawScope.drawTileOpaque(
     kind: TileKind,
     faceOrigin: Offset,
     size: Size,
@@ -390,6 +392,63 @@ private fun DrawScope.drawTileOpaque(
         faceOrigin, size, corner,
     )
     drawTileFace(kind, faceOrigin, size, glyphs, showIndex, simple)
+    if (highlight != null) {
+        drawRoundRect(highlight.copy(alpha = 0.28f * highlight.alpha), faceOrigin, size, corner)
+        drawRoundRect(highlight, faceOrigin, size, corner, style = Stroke(size.width * 0.07f))
+    }
+    if (dim > 0f) drawRoundRect(Color.Black.copy(alpha = dim), faceOrigin, size, corner)
+}
+
+/**
+ * Records each tile's artwork once into a [GraphicsLayer] (a hardware display list) so the
+ * board replays one recorded layer per tile per frame instead of issuing dozens of shapes
+ * and glyphs. Create a new cache whenever the tile size or appearance settings change, and
+ * call [release] when done.
+ */
+class TileImageCache(
+    private val graphics: androidx.compose.ui.graphics.GraphicsContext,
+    private val glyphs: GlyphCache,
+    private val size: Size,
+    private val depth: Float,
+    private val palette: TilePalette,
+    private val showIndex: Boolean,
+    private val simple: Boolean,
+    private val density: androidx.compose.ui.unit.Density,
+) {
+    private val layers = HashMap<Int, androidx.compose.ui.graphics.layer.GraphicsLayer>()
+    /** Extra room around the face for the side, shadow and stroke. */
+    private val pad = kotlin.math.ceil(depth * 0.5f).coerceAtLeast(2f)
+    private val w = kotlin.math.ceil(size.width + depth * 1.6f + pad * 2).toInt().coerceAtLeast(1)
+    private val h = kotlin.math.ceil(size.height + depth * 1.8f + pad * 2).toInt().coerceAtLeast(1)
+
+    fun layer(kind: TileKind): androidx.compose.ui.graphics.layer.GraphicsLayer = layers.getOrPut(kind.id) {
+        graphics.createGraphicsLayer().apply {
+            topLeft = androidx.compose.ui.unit.IntOffset(-pad.toInt(), -pad.toInt())
+            record(density, androidx.compose.ui.unit.LayoutDirection.Ltr, androidx.compose.ui.unit.IntSize(w, h)) {
+                drawTileOpaque(kind, Offset(pad.toInt().toFloat(), pad.toInt().toFloat()), size, depth, palette, glyphs, showIndex, null, 0f, simple)
+            }
+        }
+    }
+
+    fun release() {
+        layers.values.forEach { graphics.releaseGraphicsLayer(it) }
+        layers.clear()
+    }
+}
+
+/** Draws a recorded tile plus live overlays (selection, hint, dimming). */
+fun DrawScope.drawCachedTile(
+    cache: TileImageCache,
+    kind: TileKind,
+    faceOrigin: Offset,
+    size: Size,
+    highlight: Color? = null,
+    dim: Float = 0f,
+) {
+    translate(faceOrigin.x, faceOrigin.y) {
+        drawLayer(cache.layer(kind))
+    }
+    val corner = CornerRadius(size.width * 0.12f)
     if (highlight != null) {
         drawRoundRect(highlight.copy(alpha = 0.28f * highlight.alpha), faceOrigin, size, corner)
         drawRoundRect(highlight, faceOrigin, size, corner, style = Stroke(size.width * 0.07f))

@@ -195,6 +195,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 SwitchRow("Smart hints", "Hints look ahead and avoid dead ends", s.smartHints) { v -> update { it.copy(smartHints = v) } }
                 SwitchRow("Auto shuffle", "Shuffle automatically when no moves remain", s.autoShuffle) { v -> update { it.copy(autoShuffle = v) } }
                 SwitchRow("Show timer", null, s.showTimer) { v -> update { it.copy(showTimer = v) } }
+                SwitchRow("Fast tile rendering", "Draw tiles from a hardware cache for smoother play. Turn off if tiles look wrong.", s.fastRendering) { v -> update { it.copy(fastRendering = v) } }
 
                 Section("Daily challenge")
                 SwitchRow("Daily reminder", "Get a nudge if you haven't played today's challenge", s.dailyReminder) { on ->

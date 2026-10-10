@@ -42,6 +42,8 @@ import androidx.compose.ui.semantics.semantics
 import com.ezmanw.mathong.data.Settings
 import com.ezmanw.mathong.game.Board
 import com.ezmanw.mathong.ui.tiles.GlyphCache
+import com.ezmanw.mathong.ui.tiles.TileImageCache
+import com.ezmanw.mathong.ui.tiles.drawCachedTile
 import com.ezmanw.mathong.ui.tiles.drawTile
 import com.ezmanw.mathong.ui.tiles.palette
 import kotlinx.coroutines.launch
@@ -101,6 +103,8 @@ fun BoardView(
     onTap: (Int) -> Unit,
     modifier: Modifier = Modifier,
     onLongPress: ((Int) -> Unit)? = null,
+    /** Replay recorded tile layers. Screenshot tests turn this off (layoutlib scales offscreen layers). */
+    cacheTiles: Boolean = true,
 ) {
     val measurer = rememberTextMeasurer(cacheSize = 64)
     val glyphs = remember(measurer) { GlyphCache(measurer) }
@@ -177,9 +181,18 @@ fun BoardView(
         }
     }
 
-    val pulse by rememberInfiniteTransition(label = "hint").animateFloat(
-        0.35f, 1f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "pulse",
-    )
+    // Hint pulse only animates while a hint is showing, so an idle board never redraws.
+    val pulseAnim = remember { Animatable(1f) }
+    LaunchedEffect(hint) {
+        if (hint == null) return@LaunchedEffect
+        while (true) {
+            pulseAnim.animateTo(0.35f, tween(600))
+            pulseAnim.animateTo(1f, tween(600))
+        }
+    }
+
+    // Tile currently under the finger, drawn pressed for instant feedback.
+    var pressed by remember { mutableStateOf<Int?>(null) }
 
     var zoom by remember { mutableFloatStateOf(1f) }
     var pan by remember { mutableStateOf(Offset.Zero) }
@@ -192,6 +205,11 @@ fun BoardView(
         val h = constraints.maxHeight.toFloat()
         val metrics = remember(board.layout, w, h) { BoardMetrics(board, w, h, with(density) { 8.dp.toPx() }) }
         metricsHolder[0] = metrics
+        val graphicsContext = androidx.compose.ui.platform.LocalGraphicsContext.current
+        val tileImages = remember(metrics, palette, settings.showIndices, settings.simpleFaces, glyphs) {
+            TileImageCache(graphicsContext, glyphs, metrics.faceSize, metrics.depth, palette, settings.showIndices, settings.simpleFaces, density)
+        }
+        androidx.compose.runtime.DisposableEffect(tileImages) { onDispose { tileImages.release() } }
 
         val freeCount = freeSet.size
         val remainingPairs = board.remaining / 2
@@ -233,22 +251,28 @@ fun BoardView(
                     translationX = pan.x; translationY = pan.y
                 }
                 .pointerInput(board, metrics) {
-                    // Topmost tile under the finger wins.
-                    fun hit(pos: Offset): Int? {
+                    // Topmost tile under the finger wins; a near miss picks the closest tile.
+                    fun hit(pos: Offset, slop: Float): Int? {
                         for (k in drawOrder.indices.reversed()) {
                             val i = drawOrder[k]
                             if (!board.present[i]) continue
                             val o = metrics.faceOrigin(i)
-                            if (pos.x >= o.x && pos.x <= o.x + metrics.tileW + metrics.depth &&
-                                pos.y >= o.y && pos.y <= o.y + metrics.tileH + metrics.depth
+                            if (pos.x >= o.x - slop && pos.x <= o.x + metrics.tileW + metrics.depth + slop &&
+                                pos.y >= o.y - slop && pos.y <= o.y + metrics.tileH + metrics.depth + slop
                             ) return i
                         }
                         return null
                     }
+                    fun find(pos: Offset) = hit(pos, 0f) ?: hit(pos, metrics.tileW * 0.25f)
                     // No double-tap handler: it would delay every single tap.
                     detectTapGestures(
-                        onLongPress = { pos -> hit(pos)?.let { onLongPress?.invoke(it) } },
-                        onTap = { pos -> hit(pos)?.let(onTap) },
+                        onPress = { pos ->
+                            pressed = find(pos)
+                            tryAwaitRelease()
+                            pressed = null
+                        },
+                        onLongPress = { pos -> find(pos)?.let { onLongPress?.invoke(it) } },
+                        onTap = { pos -> find(pos)?.let(onTap) },
                     )
                 },
         ) {
@@ -267,26 +291,20 @@ fun BoardView(
                 if (shakeTile == i && shake.value > 0f) {
                     origin += Offset(sin(shake.value * 30f) * metrics.tileW * 0.08f * shake.value, 0f)
                 }
+                if (pressed == i) origin += Offset(metrics.depth * 0.45f, metrics.depth * 0.45f)
                 val highlight = when {
                     selected == i -> colors.primary
-                    hint?.let { it.first == i || it.second == i } == true -> colors.tertiary.copy(alpha = pulse)
+                    hint?.let { it.first == i || it.second == i } == true -> colors.tertiary.copy(alpha = pulseAnim.value)
                     i in matchSet -> colors.secondary
                     else -> null
                 }
                 val dim = if (settings.highlightFree && highlight == null && i !in freeSet) 0.22f else 0f
-                drawTile(
-                    kind = board.kind(i),
-                    faceOrigin = origin,
-                    size = size,
-                    depth = metrics.depth,
-                    palette = palette,
-                    glyphs = glyphs,
-                    showIndex = settings.showIndices,
-                    simple = settings.simpleFaces,
-                    highlight = highlight,
-                    dim = dim,
-                    alpha = dealAlpha,
-                )
+                val d = if (pressed == i) dim + 0.08f else dim
+                if (cacheTiles && settings.fastRendering && dealAlpha >= 0.99f) {
+                    drawCachedTile(tileImages, board.kind(i), origin, size, highlight, d)
+                } else {
+                    drawTile(board.kind(i), origin, size, metrics.depth, palette, glyphs, settings.showIndices, highlight, d, dealAlpha, settings.simpleFaces)
+                }
             }
             // Removed tiles fly above the board.
             for ((i, f) in flying) {
@@ -295,18 +313,7 @@ fun BoardView(
                 val move = (t / 0.6f).coerceAtMost(1f)
                 val fade = ((t - 0.55f) / 0.45f).coerceIn(0f, 1f)
                 val origin = f.from + (f.to - f.from) * move - Offset(0f, metrics.tileH * 0.25f * fade)
-                drawTile(
-                    kind = board.kind(i),
-                    faceOrigin = origin,
-                    size = size,
-                    depth = metrics.depth,
-                    palette = palette,
-                    glyphs = glyphs,
-                    showIndex = settings.showIndices,
-                    simple = settings.simpleFaces,
-                    highlight = colors.primary.copy(alpha = 1f - fade),
-                    alpha = 1f - fade,
-                )
+                drawTile(board.kind(i), origin, size, metrics.depth, palette, glyphs, settings.showIndices, colors.primary.copy(alpha = 1f - fade), 0f, 1f - fade, settings.simpleFaces)
             }
         }
         if (zoom > 1.01f) {
