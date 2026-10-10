@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.ezmanw.mathong.data.Settings
 import com.ezmanw.mathong.data.Stats
+import com.ezmanw.mathong.game.LayoutRegistry
 import com.ezmanw.mathong.game.Layouts
 import com.ezmanw.mathong.game.TileKind
 import com.ezmanw.mathong.ui.common.TilePreview
@@ -110,7 +111,7 @@ fun HomeScreen(
                 }
 
                 saved?.let { g ->
-                    val layout = Layouts.byId(g.layoutId)
+                    val layout = LayoutRegistry.byId(g.layoutId)
                     val left = g.present.count { it }
                     ElevatedCard(
                         onClick = onContinue,
@@ -121,7 +122,7 @@ fun HomeScreen(
                             Column(Modifier.weight(1f)) {
                                 Text("Continue", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
                                 Text(
-                                    (if (g.daily != null) "Daily · " else "") + "${layout.name} · ${left / 2} pairs left · ${formatTime(g.elapsedMs)}",
+                                    (if (g.daily != null) "Daily · " else if (g.mode != com.ezmanw.mathong.data.GameMode.CLASSIC) "${g.mode.label} · " else "") + "${layout.name} · ${left / 2} pairs left · ${formatTime(g.elapsedMs)}",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 )
@@ -138,7 +139,7 @@ fun HomeScreen(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    BigAction("New game", "Pick from ${Layouts.all.size} layouts", Icons.Filled.GridView, Modifier.weight(1f), onNewGame)
+                    BigAction("New game", "Pick from ${LayoutRegistry.all().size} layouts", Icons.Filled.GridView, Modifier.weight(1f), onNewGame)
                     BigAction("Quick play", "Random layout", Icons.Filled.Shuffle, Modifier.weight(1f), onQuickPlay)
                 }
 

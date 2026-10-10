@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -80,14 +81,27 @@ fun WinDialog(
                         style = MaterialTheme.typography.headlineMedium,
                     )
                     Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for (i in 1..3) AnimatedStar(filled = i <= result.stars, delayMs = i * 220)
+                    if (result.mode != com.ezmanw.mathong.data.GameMode.ZEN) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            for (i in 1..3) AnimatedStar(filled = i <= result.stars, delayMs = i * 220)
+                        }
+                    } else {
+                        Text("Peaceful. Take a breath.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Spacer(Modifier.height(16.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         Metric("Time", formatTime(result.timeMs))
-                        Metric("Score", result.score.toString())
-                        Metric("Best combo", "×${result.bestCombo}")
+                        when (result.mode) {
+                            com.ezmanw.mathong.data.GameMode.ZEN -> Metric("Pairs", (result.tiles / 2).toString())
+                            com.ezmanw.mathong.data.GameMode.TIME_ATTACK -> {
+                                Metric("Time left", formatTime(result.timeLeftMs))
+                                Metric("Score", result.score.toString())
+                            }
+                            com.ezmanw.mathong.data.GameMode.CLASSIC -> {
+                                Metric("Score", result.score.toString())
+                                Metric("Best combo", "×${result.bestCombo}")
+                            }
+                        }
                     }
                     if (state.newBest) {
                         Spacer(Modifier.height(12.dp))
@@ -144,7 +158,29 @@ fun WinDialog(
                     OutlinedButton(onClick = { onAchievementsShown(); onLayouts() }, Modifier.fillMaxWidth()) {
                         Text("Choose layout")
                     }
-                    TextButton(onClick = { onAchievementsShown(); onHome() }) { Text("Home") }
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    Row {
+                        TextButton(onClick = {
+                            val stars = "★".repeat(result.stars) + "☆".repeat(3 - result.stars)
+                            val text = buildString {
+                                append("Mathong ")
+                                append(if (state.daily != null) "Daily ${state.daily}" else "Mahjong Solitaire")
+                                append("\n${state.layout?.name} cleared in ${formatTime(result.timeMs)} $stars")
+                                append("\n${result.score} pts · best combo ×${result.bestCombo}")
+                                if (result.hintsUsed + result.shufflesUsed == 0) append(" · no help")
+                            }
+                            val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_TEXT, text)
+                            }
+                            context.startActivity(android.content.Intent.createChooser(send, "Share result"))
+                        }) {
+                            Icon(Icons.Filled.Share, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Share")
+                        }
+                        TextButton(onClick = { onAchievementsShown(); onHome() }) { Text("Home") }
+                    }
                 }
             }
         }

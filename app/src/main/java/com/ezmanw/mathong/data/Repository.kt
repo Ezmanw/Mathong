@@ -9,7 +9,11 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import com.ezmanw.mathong.game.Layout
+import com.ezmanw.mathong.game.LayoutRegistry
+import com.ezmanw.mathong.game.Slot
 
 private val Context.dataStore by preferencesDataStore(name = "mathong")
 
@@ -34,6 +38,7 @@ class Repository(private val context: Context) {
         val savedGame = stringPreferencesKey("saved_game")
         val lastLayout = stringPreferencesKey("last_layout")
         val seenTutorial = booleanPreferencesKey("seen_tutorial")
+        val customLayouts = stringPreferencesKey("custom_layouts")
     }
 
     private inline fun <reified E : Enum<E>> Preferences.enum(key: Preferences.Key<String>, default: E): E =
@@ -105,4 +110,38 @@ class Repository(private val context: Context) {
 
     val seenTutorial: Flow<Boolean> = store.data.map { it[Keys.seenTutorial] ?: false }
     suspend fun setSeenTutorial() = store.edit { it[Keys.seenTutorial] = true }
+
+    val customLayouts: Flow<List<CustomLayoutData>> = store.data.map { p ->
+        p[Keys.customLayouts]?.let {
+            runCatching { json.decodeFromString(ListSerializer(CustomLayoutData.serializer()), it) }.getOrNull()
+        } ?: emptyList()
+    }
+
+    private suspend fun editCustom(transform: (List<CustomLayoutData>) -> List<CustomLayoutData>) {
+        store.edit { p ->
+            val cur = p[Keys.customLayouts]?.let {
+                runCatching { json.decodeFromString(ListSerializer(CustomLayoutData.serializer()), it) }.getOrNull()
+            } ?: emptyList()
+            p[Keys.customLayouts] = json.encodeToString(ListSerializer(CustomLayoutData.serializer()), transform(cur))
+        }
+        syncCustomLayouts()
+    }
+
+    suspend fun saveCustomLayout(data: CustomLayoutData) = editCustom { list ->
+        if (list.any { it.id == data.id }) list.map { if (it.id == data.id) data else it } else list + data
+    }
+
+    suspend fun deleteCustomLayout(id: String) = editCustom { list -> list.filterNot { it.id == id } }
+
+    /** Pushes stored custom layouts into [LayoutRegistry]. */
+    suspend fun syncCustomLayouts() {
+        val layouts = customLayouts.first().mapNotNull { it.toLayout() }
+        LayoutRegistry.setCustom(layouts)
+    }
+}
+
+fun CustomLayoutData.toLayout(): Layout? {
+    if (slots.size < 6 || slots.size % 3 != 0) return null
+    val list = slots.chunked(3).map { Slot(it[0], it[1], it[2]) }
+    return Layout(id, name, LayoutRegistry.estimateDifficulty(list), list)
 }

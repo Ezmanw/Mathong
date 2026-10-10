@@ -76,6 +76,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ezmanw.mathong.data.BoardBackground
+import com.ezmanw.mathong.data.GameMode
 import kotlinx.coroutines.delay
 
 fun formatTime(ms: Long): String {
@@ -111,6 +112,7 @@ fun GameScreen(
     val settings by vm.settings.collectAsStateWithLifecycle()
     val view = LocalView.current
     val currentSettings by rememberUpdatedState(settings)
+    val currentState by rememberUpdatedState(state)
     val snackbar = remember { SnackbarHostState() }
     var comboText by remember { mutableStateOf<String?>(null) }
     var comboKey by remember { mutableStateOf(0) }
@@ -129,7 +131,11 @@ fun GameScreen(
                             if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.VIRTUAL_KEY
                         )
                     }
-                    comboText = if (e.combo > 1) "Combo ×${e.combo}  +${e.points}" else "+${e.points}"
+                    comboText = when (currentState.mode) {
+                        GameMode.ZEN -> null
+                        GameMode.TIME_ATTACK -> "+${(GameViewModel.TIME_PER_MATCH + (e.combo - 1) * 1000) / 1000}s" + if (e.combo > 1) "  ×${e.combo}" else ""
+                        GameMode.CLASSIC -> if (e.combo > 1) "Combo ×${e.combo}  +${e.points}" else "+${e.points}"
+                    }
                     comboKey++
                 }
                 GameEvent.Invalid -> if (currentSettings.haptics) {
@@ -142,7 +148,11 @@ fun GameScreen(
         }
     }
 
-    val title = if (state.daily != null) "Daily Challenge" else state.layout?.name ?: ""
+    val title = when {
+        state.daily != null -> "Daily Challenge"
+        state.mode != GameMode.CLASSIC -> "${state.layout?.name ?: ""} · ${state.mode.label}"
+        else -> state.layout?.name ?: ""
+    }
     val paused = state.status == GameStatus.PAUSED
     val menu: @Composable () -> Unit = {
         Box {
@@ -291,6 +301,25 @@ fun GameScreen(
         )
     }
 
+    if (state.status == GameStatus.TIME_UP) {
+        AlertDialog(
+            onDismissRequest = {},
+            icon = { Icon(Icons.Outlined.Timer, null) },
+            title = { Text("Time's up!") },
+            text = {
+                val left = (state.board?.remaining ?: 0) / 2
+                Text("You ran out of time with $left pair${if (left == 1) "" else "s"} left. Match quickly to earn more time — combos add bonus seconds.")
+            },
+            confirmButton = { TextButton(onClick = { vm.restart() }) { Text("Try again") } },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { vm.newGame() }) { Text("New deal") }
+                    TextButton(onClick = onBack) { Text("Home") }
+                }
+            },
+        )
+    }
+
     if (confirmNew) {
         AlertDialog(
             onDismissRequest = { confirmNew = false },
@@ -330,10 +359,21 @@ private fun Hud(state: GameUiState, showTimer: Boolean, onDarkBg: Boolean, title
         if (title != null) {
             Text(title, style = MaterialTheme.typography.titleMedium, color = fg)
         }
-        if (showTimer) {
-            HudChip(Icons.Outlined.Timer, formatTime(state.elapsedMs), fg)
+        when (state.mode) {
+            GameMode.TIME_ATTACK -> {
+                val low = state.timeLeftMs < 10_000
+                HudChip(
+                    Icons.Outlined.Timer, formatTime(state.timeLeftMs + 999),
+                    if (low) MaterialTheme.colorScheme.error else fg,
+                )
+                HudChip(null, "Score ${state.score}", fg)
+            }
+            GameMode.ZEN -> Unit
+            GameMode.CLASSIC -> {
+                if (showTimer) HudChip(Icons.Outlined.Timer, formatTime(state.elapsedMs), fg)
+                HudChip(null, "Score ${state.score}", fg)
+            }
         }
-        HudChip(null, "Score ${state.score}", fg)
         Spacer(Modifier.weight(1f))
         val board = state.board
         val remaining = remember(board) { board?.remaining ?: 0 }

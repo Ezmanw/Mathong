@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.ezmanw.mathong.MathongApp
 import com.ezmanw.mathong.audio.Sfx
 import com.ezmanw.mathong.data.Achievements
+import com.ezmanw.mathong.data.GameMode
 import com.ezmanw.mathong.data.GameResult
 import com.ezmanw.mathong.data.LayoutStats
 import com.ezmanw.mathong.data.RecentGame
@@ -15,6 +16,7 @@ import com.ezmanw.mathong.data.SavedMove
 import com.ezmanw.mathong.game.Board
 import com.ezmanw.mathong.game.Generator
 import com.ezmanw.mathong.game.Layout
+import com.ezmanw.mathong.game.LayoutRegistry
 import com.ezmanw.mathong.game.Layouts
 import com.ezmanw.mathong.game.Solver
 import kotlinx.coroutines.Dispatchers
@@ -35,7 +37,7 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import kotlin.random.Random
 
-enum class GameStatus { LOADING, PLAYING, PAUSED, STUCK, WON }
+enum class GameStatus { LOADING, PLAYING, PAUSED, STUCK, WON, TIME_UP }
 
 data class GameUiState(
     val board: Board? = null,
@@ -58,6 +60,8 @@ data class GameUiState(
     val newBest: Boolean = false,
     val shakeTile: Int? = null,
     val shakeKey: Int = 0,
+    val mode: GameMode = GameMode.CLASSIC,
+    val timeLeftMs: Long = 0,
 ) {
     val layout: Layout? get() = board?.layout
 }
@@ -86,23 +90,26 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
     private var timerJob: Job? = null
     private var saveJob: Job? = null
     private var playedRecorded = false
+    private var mode = GameMode.CLASSIC
 
     init {
         val layoutId: String? = savedState.get<String>("layout")?.takeIf { it.isNotBlank() }
         val daily: Boolean = savedState["daily"] ?: false
         val resume: Boolean = savedState["resume"] ?: false
         val seedArg: Long = savedState["seed"] ?: -1L
+        mode = savedState.get<String>("mode")?.let { m -> GameMode.entries.firstOrNull { it.name == m } } ?: GameMode.CLASSIC
         viewModelScope.launch {
             settings.collect { sounds.enabled = it.sound }
         }
         viewModelScope.launch {
+            if (!LayoutRegistry.loaded) repo.syncCustomLayouts()
             val saved = repo.savedGame.first()
             val today = LocalDate.now().toString()
             when {
                 resume && saved != null -> restore(saved)
                 daily && saved?.daily == today -> restore(saved)
                 daily -> startDaily()
-                else -> newGame(Layouts.byId(layoutId ?: repo.lastLayout.first() ?: "turtle"), if (seedArg >= 0) seedArg else null)
+                else -> newGame(LayoutRegistry.byId(layoutId ?: repo.lastLayout.first() ?: "turtle"), if (seedArg >= 0) seedArg else null)
             }
             startTimer()
         }
@@ -117,7 +124,9 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
                 val now = System.currentTimeMillis()
                 val s = _state.value
                 if (s.status == GameStatus.PLAYING && screenVisible) {
-                    _state.update { it.copy(elapsedMs = it.elapsedMs + (now - last)) }
+                    val dt = now - last
+                    _state.update { it.copy(elapsedMs = it.elapsedMs + dt, timeLeftMs = (it.timeLeftMs - dt).coerceAtLeast(0)) }
+                    if (s.mode == GameMode.TIME_ATTACK && s.timeLeftMs - dt <= 0) timeUp()
                 }
                 last = now
             }
@@ -132,7 +141,7 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
     private suspend fun recordAbandonIfNeeded() {
         val s = _state.value
         val abandonedSaved = s.board == null && repo.savedGame.first()?.history?.isNotEmpty() == true
-        if (abandonedSaved || (s.status != GameStatus.WON && s.history.isNotEmpty())) {
+        if (abandonedSaved || (s.mode == GameMode.CLASSIC && s.status != GameStatus.WON && s.history.isNotEmpty())) {
             repo.updateStats { it.copy(currentStreak = 0) }
         }
     }
@@ -145,7 +154,7 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
             repo.setLastLayout(layout.id)
             playedRecorded = false
             lastMatchAt = 0
-            _state.value = GameUiState(board = board, seed = sd, status = GameStatus.PLAYING)
+            _state.value = fresh(board, sd, null)
             repo.saveGame(null)
         }
     }
@@ -156,7 +165,7 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
         viewModelScope.launch {
             val board = withContext(Dispatchers.Default) { Generator.deal(layout, s.seed) }
             lastMatchAt = 0
-            _state.value = GameUiState(board = board, seed = s.seed, status = GameStatus.PLAYING, daily = s.daily)
+            _state.value = fresh(board, s.seed, s.daily)
             playedRecorded = false
         }
     }
@@ -168,17 +177,35 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
         val (layout, seed) = dailyFor(today)
         val board = withContext(Dispatchers.Default) { Generator.deal(layout, seed) }
         playedRecorded = false
-        _state.value = GameUiState(board = board, seed = seed, status = GameStatus.PLAYING, daily = today.toString())
+        mode = GameMode.CLASSIC
+        _state.value = fresh(board, seed, today.toString())
+    }
+
+    private fun fresh(board: Board, seed: Long, daily: String?) = GameUiState(
+        board = board, seed = seed, status = GameStatus.PLAYING, daily = daily, mode = mode,
+        timeLeftMs = if (mode == GameMode.TIME_ATTACK) timeAttackStart(board.layout) else 0,
+    )
+
+    private fun timeUp() {
+        sounds.play(Sfx.ERROR)
+        _state.update { it.copy(status = GameStatus.TIME_UP, selected = null, hint = null) }
+        viewModelScope.launch {
+            repo.saveGame(null)
+            repo.updateStats { it.copy(timeAttackLosses = it.timeAttackLosses + 1) }
+        }
     }
 
     private fun restore(saved: SavedGame) {
-        val layout = Layouts.byId(saved.layoutId)
+        val layout = LayoutRegistry.byId(saved.layoutId)
         if (saved.kinds.size != layout.size) {
             newGame(layout); return
         }
         val board = Board(layout, saved.kinds.toIntArray(), saved.present.toBooleanArray())
         playedRecorded = saved.history.isNotEmpty()
+        mode = saved.mode
         _state.value = GameUiState(
+            mode = saved.mode,
+            timeLeftMs = saved.timeLeftMs,
             board = board,
             seed = saved.seed,
             history = saved.history,
@@ -231,7 +258,8 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
         val now = System.currentTimeMillis()
         val combo = if (lastMatchAt != 0L && now - lastMatchAt < 4000) (s.combo + 1).coerceAtMost(9) else 1
         lastMatchAt = now
-        val points = 10 * combo
+        val points = if (s.mode == GameMode.ZEN) 0 else 10 * combo
+        val bonusTime = if (s.mode == GameMode.TIME_ATTACK) TIME_PER_MATCH + (combo - 1) * 1000L else 0L
         val newBoard = board.remove(a, b)
         val move = SavedMove(a, b, points)
         sounds.play(Sfx.MATCH)
@@ -246,12 +274,13 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
                 score = it.score + points,
                 combo = combo,
                 bestCombo = maxOf(it.bestCombo, combo),
+                timeLeftMs = it.timeLeftMs + bonusTime,
             )
         }
         viewModelScope.launch {
             repo.updateStats { st ->
                 var n = st.copy(totalMatches = st.totalMatches + 1, bestCombo = maxOf(st.bestCombo, combo))
-                if (!playedRecorded) {
+                if (!playedRecorded && s.mode == GameMode.CLASSIC) {
                     val ls = n.perLayout[newBoard.layout.id] ?: LayoutStats()
                     n = n.copy(perLayout = n.perLayout + (newBoard.layout.id to ls.copy(played = ls.played + 1)))
                 }
@@ -277,14 +306,26 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
         val s = _state.value
         val layout = s.layout ?: return
         val targetMs = layout.size * 4_000L
-        val timeBonus = ((targetMs - s.elapsedMs) / 1000).coerceAtLeast(0).toInt() * 2
         val helps = s.hintsUsed + s.shufflesUsed
-        val stars = when {
-            helps == 0 && s.undosUsed <= 3 && s.elapsedMs <= targetMs -> 3
-            helps <= 2 -> 2
-            else -> 1
+        val stars = when (s.mode) {
+            GameMode.ZEN -> 0
+            GameMode.TIME_ATTACK -> when {
+                s.timeLeftMs >= 30_000 && helps == 0 -> 3
+                s.timeLeftMs >= 10_000 -> 2
+                else -> 1
+            }
+            GameMode.CLASSIC -> when {
+                helps == 0 && s.undosUsed <= 3 && s.elapsedMs <= targetMs -> 3
+                helps <= 2 -> 2
+                else -> 1
+            }
         }
-        val finalScore = s.score + timeBonus + stars * 50
+        val timeBonus = when (s.mode) {
+            GameMode.ZEN -> 0
+            GameMode.TIME_ATTACK -> (s.timeLeftMs / 1000).toInt() * 5
+            GameMode.CLASSIC -> ((targetMs - s.elapsedMs) / 1000).coerceAtLeast(0).toInt() * 2
+        }
+        val finalScore = if (s.mode == GameMode.ZEN) 0 else s.score + timeBonus + stars * 50
         val result = GameResult(
             layoutId = layout.id,
             won = true,
@@ -297,6 +338,8 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
             bestCombo = s.bestCombo,
             daily = s.daily,
             tiles = layout.size,
+            mode = s.mode,
+            timeLeftMs = s.timeLeftMs,
         )
         sounds.play(Sfx.WIN)
         _state.update { it.copy(status = GameStatus.WON, score = finalScore, result = result, selected = null, hint = null) }
@@ -304,24 +347,30 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
             repo.saveGame(null)
             var newBest = false
             val updated = repo.updateStats { st ->
-                val ls = st.perLayout[layout.id] ?: LayoutStats(played = 1)
-                newBest = ls.bestTimeMs == 0L || s.elapsedMs < ls.bestTimeMs
-                val nls = ls.copy(
-                    won = ls.won + 1,
-                    bestTimeMs = if (newBest) s.elapsedMs else ls.bestTimeMs,
-                    bestScore = maxOf(ls.bestScore, finalScore),
-                    bestStars = maxOf(ls.bestStars, stars),
-                )
-                val streak = st.currentStreak + 1
-                st.copy(
-                    perLayout = st.perLayout + (layout.id to nls),
-                    currentStreak = streak,
-                    bestStreak = maxOf(st.bestStreak, streak),
-                    totalPlayMs = st.totalPlayMs + s.elapsedMs,
-                    hintsUsed = st.hintsUsed + s.hintsUsed,
-                    dailyCompleted = if (s.daily != null) st.dailyCompleted + s.daily else st.dailyCompleted,
-                    recent = (st.recent + RecentGame(layout.id, s.elapsedMs, finalScore, stars, layout.size, System.currentTimeMillis(), s.daily != null)).takeLast(30),
-                )
+                when (s.mode) {
+                    GameMode.ZEN -> st.copy(zenWins = st.zenWins + 1, totalPlayMs = st.totalPlayMs + s.elapsedMs)
+                    GameMode.TIME_ATTACK -> st.copy(timeAttackWins = st.timeAttackWins + 1, totalPlayMs = st.totalPlayMs + s.elapsedMs)
+                    GameMode.CLASSIC -> {
+                        val ls = st.perLayout[layout.id] ?: LayoutStats(played = 1)
+                        newBest = ls.bestTimeMs == 0L || s.elapsedMs < ls.bestTimeMs
+                        val nls = ls.copy(
+                            won = ls.won + 1,
+                            bestTimeMs = if (newBest) s.elapsedMs else ls.bestTimeMs,
+                            bestScore = maxOf(ls.bestScore, finalScore),
+                            bestStars = maxOf(ls.bestStars, stars),
+                        )
+                        val streak = st.currentStreak + 1
+                        st.copy(
+                            perLayout = st.perLayout + (layout.id to nls),
+                            currentStreak = streak,
+                            bestStreak = maxOf(st.bestStreak, streak),
+                            totalPlayMs = st.totalPlayMs + s.elapsedMs,
+                            hintsUsed = st.hintsUsed + s.hintsUsed,
+                            dailyCompleted = if (s.daily != null) st.dailyCompleted + s.daily else st.dailyCompleted,
+                            recent = (st.recent + RecentGame(layout.id, s.elapsedMs, finalScore, stars, layout.size, System.currentTimeMillis(), s.daily != null)).takeLast(30),
+                        )
+                    }
+                }
             }
             val earned = Achievements.evaluate(updated, result)
             if (earned.isNotEmpty()) {
@@ -335,7 +384,7 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
     fun undo() {
         val s = _state.value
         val board = s.board ?: return
-        if (s.history.isEmpty() || s.status == GameStatus.WON) return
+        if (s.history.isEmpty() || s.status == GameStatus.WON || s.status == GameStatus.TIME_UP) return
         val last = s.history.last()
         sounds.play(Sfx.UNDO)
         _state.update {
@@ -359,6 +408,7 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
         val s = _state.value
         val board = s.board ?: return
         val next = s.redo.lastOrNull() ?: return
+        if (s.status == GameStatus.TIME_UP) return
         if (!board.canMatch(next.a, next.b)) { _state.update { it.copy(redo = emptyList()) }; return }
         sounds.play(Sfx.MATCH)
         val nb = board.remove(next.a, next.b)
@@ -393,8 +443,8 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
                 it.copy(
                     hint = move,
                     selected = null,
-                    hintsUsed = it.hintsUsed + 1,
-                    score = (it.score - 20).coerceAtLeast(0),
+                    hintsUsed = it.hintsUsed + if (it.mode == GameMode.ZEN) 0 else 1,
+                    score = if (it.mode == GameMode.ZEN) it.score else (it.score - 20).coerceAtLeast(0),
                     status = GameStatus.PLAYING,
                 )
             }
@@ -406,7 +456,7 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
     fun shuffle(penalty: Boolean = true) {
         val s = _state.value
         val board = s.board ?: return
-        if (s.status == GameStatus.WON) return
+        if (s.status == GameStatus.WON || s.status == GameStatus.TIME_UP) return
         viewModelScope.launch {
             val nb = withContext(Dispatchers.Default) {
                 val r = Random(System.nanoTime())
@@ -422,7 +472,7 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
                     selected = null,
                     hint = null,
                     redo = emptyList(),
-                    shufflesUsed = it.shufflesUsed + if (penalty) 1 else 0,
+                    shufflesUsed = it.shufflesUsed + if (penalty && it.mode != GameMode.ZEN) 1 else 0,
                     score = if (penalty) (it.score - 50).coerceAtLeast(0) else it.score,
                     status = GameStatus.PLAYING,
                 )
@@ -468,7 +518,7 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
     private suspend fun persistNow() {
         val s = _state.value
         val board = s.board ?: return
-        if (s.status == GameStatus.WON || s.status == GameStatus.LOADING) return
+        if (s.status == GameStatus.WON || s.status == GameStatus.LOADING || s.status == GameStatus.TIME_UP) return
         if (s.history.isEmpty()) return
         repo.saveGame(
             SavedGame(
@@ -484,6 +534,8 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
                 undosUsed = s.undosUsed,
                 daily = s.daily,
                 bestCombo = s.bestCombo,
+                mode = s.mode,
+                timeLeftMs = s.timeLeftMs,
             )
         )
     }
@@ -491,13 +543,18 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
     override fun onCleared() {
         // Best effort save; viewModelScope is cancelled at this point.
         val s = _state.value
-        if (s.status != GameStatus.WON && s.history.isNotEmpty()) {
+        if (s.status != GameStatus.WON && s.status != GameStatus.TIME_UP && s.history.isNotEmpty()) {
             kotlinx.coroutines.runBlocking { persistNow() }
         }
         super.onCleared()
     }
 
     companion object {
+        const val TIME_PER_MATCH = 4_000L
+
+        /** Starting time for Time Attack: tight enough that matching bonuses matter. */
+        fun timeAttackStart(layout: Layout): Long = 30_000L + layout.size * 600L
+
         fun dailyFor(date: LocalDate): Pair<Layout, Long> {
             val pool = Layouts.all.filter { it.size >= 60 }
             val day = date.toEpochDay()

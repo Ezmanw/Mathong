@@ -7,6 +7,8 @@ Mahjong Solitaire for Android, built with Kotlin, Jetpack Compose and Material 3
 - Guaranteed-solvable deals and shuffles
 - Smart look-ahead hints, undo/redo, shuffle, auto-shuffle, auto-finish, matching-tile assist
 - Daily Challenge (same deal for everyone each day) with streak calendar
+- Game modes: Classic, Time Attack, Zen
+- Layout editor with layers, mirror symmetry and solvability check
 - Combo scoring, time bonus, star ratings, per-layout best times
 - Achievements and statistics with a pace chart
 - Landscape layout with navigation rail

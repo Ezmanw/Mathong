@@ -75,6 +75,22 @@ class ScreenshotTest {
         }
     }
 
+    @Test
+    fun editorCanvas() {
+        val l = Layouts.castle
+        val ox = (com.ezmanw.mathong.ui.editor.GRID_W - (l.maxX - l.minX)) / 2
+        val st = com.ezmanw.mathong.ui.editor.EditorState(
+            slots = l.slots.map { com.ezmanw.mathong.game.Slot(it.x + ox, it.y + 2, it.z) }, layer = 1,
+        )
+        paparazzi.snapshot {
+            MathongTheme(dynamicColor = false) {
+                Box(Modifier.fillMaxSize().background(androidx.compose.material3.MaterialTheme.colorScheme.background)) {
+                    com.ezmanw.mathong.ui.editor.EditorCanvas(st, { _, _ -> }, Modifier.fillMaxSize().padding(12.dp))
+                }
+            }
+        }
+    }
+
     @Test fun turtle() = board("turtle", Settings())
     @Test fun pyramidFelt() = board("pyramid", Settings(background = BoardBackground.FELT, tileTheme = TileTheme.IVORY), 10)
     @Test fun pocketIndices() = board("pocket", Settings(showIndices = true, tileTheme = TileTheme.SAPPHIRE))

@@ -44,6 +44,8 @@ class Geometry private constructor(val layout: Layout) {
 
     companion object {
         private val cache = HashMap<String, Geometry>()
+        fun invalidate(id: String) = synchronized(cache) { cache.remove(id) }
+
         fun of(layout: Layout): Geometry = synchronized(cache) {
             cache.getOrPut(layout.id) { Geometry(layout) }
         }

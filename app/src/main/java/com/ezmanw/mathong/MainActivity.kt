@@ -17,8 +17,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.ezmanw.mathong.data.GameMode
 import com.ezmanw.mathong.data.Settings
-import com.ezmanw.mathong.game.Layouts
+import com.ezmanw.mathong.game.LayoutRegistry
+import com.ezmanw.mathong.ui.editor.EditorScreen
 import com.ezmanw.mathong.ui.achievements.AchievementsScreen
 import com.ezmanw.mathong.ui.game.GameScreen
 import com.ezmanw.mathong.ui.help.HowToPlayScreen
@@ -45,14 +47,17 @@ class MainActivity : ComponentActivity() {
 private object Routes {
     const val HOME = "home"
     const val LAYOUTS = "layouts"
-    const val GAME = "game?layout={layout}&daily={daily}&resume={resume}&nonce={nonce}"
+    const val GAME = "game?layout={layout}&daily={daily}&resume={resume}&mode={mode}&nonce={nonce}"
     const val STATS = "stats"
     const val ACHIEVEMENTS = "achievements"
     const val SETTINGS = "settings"
     const val HELP = "help"
+    const val EDITOR = "editor?id={id}"
 
-    fun game(layout: String? = null, daily: Boolean = false, resume: Boolean = false) =
-        "game?layout=${layout ?: ""}&daily=$daily&resume=$resume&nonce=${System.nanoTime()}"
+    fun editor(id: String? = null) = "editor?id=${id ?: ""}"
+
+    fun game(layout: String? = null, daily: Boolean = false, resume: Boolean = false, mode: GameMode = GameMode.CLASSIC) =
+        "game?layout=${layout ?: ""}&daily=$daily&resume=$resume&mode=${mode.name}&nonce=${System.nanoTime()}"
 }
 
 @Composable
@@ -72,7 +77,7 @@ private fun MathongNavHost(nav: NavHostController) {
             HomeScreen(
                 onContinue = { openGame(Routes.game(resume = true)) },
                 onNewGame = { nav.navigate(Routes.LAYOUTS) },
-                onQuickPlay = { openGame(Routes.game(Layouts.all.random().id)) },
+                onQuickPlay = { openGame(Routes.game(LayoutRegistry.all().random().id)) },
                 onDaily = { openGame(Routes.game(daily = true)) },
                 onStats = { nav.navigate(Routes.STATS) },
                 onAchievements = { nav.navigate(Routes.ACHIEVEMENTS) },
@@ -81,7 +86,12 @@ private fun MathongNavHost(nav: NavHostController) {
             )
         }
         composable(Routes.LAYOUTS) {
-            LayoutPickerScreen(onBack = { nav.popBackStack() }, onPick = { openGame(Routes.game(it)) })
+            LayoutPickerScreen(
+                onBack = { nav.popBackStack() },
+                onPick = { id, mode -> openGame(Routes.game(id, mode = mode)) },
+                onCreate = { nav.navigate(Routes.editor()) },
+                onEdit = { nav.navigate(Routes.editor(it)) },
+            )
         }
         composable(
             Routes.GAME,
@@ -89,6 +99,7 @@ private fun MathongNavHost(nav: NavHostController) {
                 navArgument("layout") { type = NavType.StringType; nullable = true; defaultValue = null },
                 navArgument("daily") { type = NavType.BoolType; defaultValue = false },
                 navArgument("resume") { type = NavType.BoolType; defaultValue = false },
+                navArgument("mode") { type = NavType.StringType; defaultValue = GameMode.CLASSIC.name },
                 navArgument("nonce") { type = NavType.LongType; defaultValue = 0L },
             ),
         ) {
@@ -97,6 +108,15 @@ private fun MathongNavHost(nav: NavHostController) {
                 onChooseLayout = { nav.navigate(Routes.LAYOUTS) },
                 onHelp = { nav.navigate(Routes.HELP) },
                 onSettings = { nav.navigate(Routes.SETTINGS) },
+            )
+        }
+        composable(
+            Routes.EDITOR,
+            arguments = listOf(navArgument("id") { type = NavType.StringType; nullable = true; defaultValue = null }),
+        ) {
+            EditorScreen(
+                onBack = { nav.popBackStack() },
+                onPlay = { openGame(Routes.game(it)) },
             )
         }
         composable(Routes.STATS) { StatsScreen(onBack = { nav.popBackStack() }) }

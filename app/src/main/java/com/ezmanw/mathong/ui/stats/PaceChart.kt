@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.ezmanw.mathong.data.RecentGame
+import com.ezmanw.mathong.game.LayoutRegistry
 import com.ezmanw.mathong.game.Layouts
 import com.ezmanw.mathong.ui.game.formatTime
 import java.text.DateFormat
@@ -54,7 +55,7 @@ fun PaceChart(recent: List<RecentGame>) {
                 }
                 if (g != null) {
                     Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
-                        Text("${Layouts.byId(g.layoutId).name}${if (g.daily) " (daily)" else ""}", style = MaterialTheme.typography.labelLarge, color = cs.onSurface)
+                        Text("${LayoutRegistry.byId(g.layoutId).name}${if (g.daily) " (daily)" else ""}", style = MaterialTheme.typography.labelLarge, color = cs.onSurface)
                         Text("${formatTime(g.timeMs)} · %.1fs/pair · ${g.score} pts".format(g.secondsPerPair()), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                         Text(DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(g.at)), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
                     }

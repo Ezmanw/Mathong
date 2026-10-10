@@ -14,7 +14,7 @@ object Generator {
         val random = Random(seed)
         val pairs = TileKind.fullSetPairs().shuffled(random).take(layout.size / 2)
         val slots = (0 until layout.size).toList()
-        repeat(500) {
+        repeat(if (layout.id.startsWith("__validate")) 25 else 500) {
             val assigned = assign(layout, slots, pairs, random)
             if (assigned != null) {
                 val kinds = IntArray(layout.size)

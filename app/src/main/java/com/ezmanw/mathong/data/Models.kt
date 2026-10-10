@@ -4,6 +4,12 @@ import kotlinx.serialization.Serializable
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
+enum class GameMode(val label: String, val description: String) {
+    CLASSIC("Classic", "Timer, score and stars"),
+    TIME_ATTACK("Time Attack", "Beat the countdown — every match adds time"),
+    ZEN("Zen", "No timer, no score, free hints"),
+}
+
 enum class TileTheme(val label: String) {
     JADE("Jade"), IVORY("Ivory"), CRIMSON("Crimson"), SAPPHIRE("Sapphire"), AMBER("Amber"), ONYX("Onyx")
 }
@@ -48,6 +54,9 @@ data class Stats(
     val dailyCompleted: Set<String> = emptySet(),
     val achievements: Map<String, Long> = emptyMap(),
     val recent: List<RecentGame> = emptyList(),
+    val timeAttackWins: Int = 0,
+    val timeAttackLosses: Int = 0,
+    val zenWins: Int = 0,
 ) {
     val gamesPlayed get() = perLayout.values.sumOf { it.played }
     val gamesWon get() = perLayout.values.sumOf { it.won }
@@ -82,4 +91,15 @@ data class SavedGame(
     val undosUsed: Int,
     val daily: String? = null,
     val bestCombo: Int = 0,
+    val mode: GameMode = GameMode.CLASSIC,
+    val timeLeftMs: Long = 0,
+)
+
+@Serializable
+data class CustomLayoutData(
+    val id: String,
+    val name: String,
+    val created: Long,
+    /** Flattened x, y, z triples in half-tile units. */
+    val slots: List<Int>,
 )

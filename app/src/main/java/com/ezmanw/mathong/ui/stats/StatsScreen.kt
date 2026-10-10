@@ -41,6 +41,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ezmanw.mathong.data.Stats
+import com.ezmanw.mathong.game.LayoutRegistry
 import com.ezmanw.mathong.game.Layouts
 import com.ezmanw.mathong.ui.common.BackTopBar
 import com.ezmanw.mathong.ui.common.repository
@@ -85,6 +86,12 @@ fun StatsScreen(onBack: () -> Unit) {
                     StatTile("Dailies", stats.dailyCompleted.size.toString(), Modifier.weight(1f))
                 }
 
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    StatTile("Time Attack", "${stats.timeAttackWins}/${stats.timeAttackWins + stats.timeAttackLosses}", Modifier.weight(1f))
+                    StatTile("Zen boards", stats.zenWins.toString(), Modifier.weight(1f))
+                    StatTile("Awards", stats.achievements.size.toString(), Modifier.weight(1f))
+                }
+
                 Text("Pace", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
                 PaceChart(stats.recent)
 
@@ -101,7 +108,7 @@ fun StatsScreen(onBack: () -> Unit) {
                             Header("Best score", Modifier.weight(1f))
                         }
                         HorizontalDivider()
-                        Layouts.all.forEach { l ->
+                        LayoutRegistry.all().forEach { l ->
                             val ls = stats.perLayout[l.id]
                             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                                 Cell(l.name, Modifier.weight(1.4f), TextAlign.Start)

@@ -38,10 +38,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
+import com.ezmanw.mathong.data.GameMode
 import com.ezmanw.mathong.data.Stats
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import com.ezmanw.mathong.game.Difficulty
 import com.ezmanw.mathong.game.Layout
+import com.ezmanw.mathong.game.LayoutRegistry
 import com.ezmanw.mathong.game.Layouts
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.IconButton
 import com.ezmanw.mathong.ui.common.BackTopBar
 import com.ezmanw.mathong.ui.common.LayoutThumbnail
 import com.ezmanw.mathong.ui.common.repository
@@ -49,13 +58,22 @@ import com.ezmanw.mathong.ui.game.formatTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LayoutPickerScreen(onBack: () -> Unit, onPick: (String) -> Unit) {
+fun LayoutPickerScreen(onBack: () -> Unit, onPick: (String, GameMode) -> Unit, onCreate: () -> Unit, onEdit: (String) -> Unit) {
     val stats by repository().stats.collectAsState(initial = Stats())
     var filter by rememberSaveable { mutableStateOf<Difficulty?>(null) }
+    var mode by rememberSaveable { mutableStateOf(GameMode.CLASSIC) }
+    val custom by LayoutRegistry.custom.collectAsState()
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
         topBar = { BackTopBar("Choose a layout", onBack, scroll) },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = onCreate,
+                icon = { Icon(Icons.Filled.Add, null) },
+                text = { Text("Create") },
+            )
+        },
     ) { padding ->
         LazyVerticalGrid(
             columns = GridCells.Adaptive(160.dp),
@@ -64,6 +82,25 @@ fun LayoutPickerScreen(onBack: () -> Unit, onPick: (String) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column {
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                        GameMode.entries.forEachIndexed { i, m ->
+                            SegmentedButton(
+                                selected = mode == m,
+                                onClick = { mode = m },
+                                shape = SegmentedButtonDefaults.itemShape(i, GameMode.entries.size),
+                            ) { Text(m.label, maxLines = 1) }
+                        }
+                    }
+                    Text(
+                        mode.description,
+                        Modifier.padding(top = 6.dp, start = 4.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(selected = filter == null, onClick = { filter = null }, label = { Text("All") })
@@ -76,9 +113,22 @@ fun LayoutPickerScreen(onBack: () -> Unit, onPick: (String) -> Unit) {
                     }
                 }
             }
-            items(Layouts.all.filter { filter == null || it.difficulty == filter }, key = { it.id }) { l ->
-                LayoutCard(l, stats, onClick = { onPick(l.id) })
+            val customShown = custom.filter { filter == null || it.difficulty == filter }
+            if (customShown.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text("Your layouts", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                }
+                items(customShown, key = { it.id }) { l ->
+                    LayoutCard(l, stats, onClick = { onPick(l.id, mode) }, onEdit = { onEdit(l.id) })
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text("Built-in", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                }
             }
+            items(Layouts.all.filter { filter == null || it.difficulty == filter }, key = { it.id }) { l ->
+                LayoutCard(l, stats, onClick = { onPick(l.id, mode) })
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(72.dp)) }
         }
     }
 }
@@ -94,13 +144,20 @@ fun Difficulty.color(): Color = when (this) {
 }
 
 @Composable
-private fun LayoutCard(layout: Layout, stats: Stats, onClick: () -> Unit) {
+private fun LayoutCard(layout: Layout, stats: Stats, onClick: () -> Unit, onEdit: (() -> Unit)? = null) {
     val ls = stats.perLayout[layout.id]
     Card(onClick = onClick) {
         Column(Modifier.padding(12.dp)) {
             LayoutThumbnail(layout, Modifier.fillMaxWidth().aspectRatio(1.2f))
             Spacer(Modifier.height(8.dp))
-            Text(layout.name, style = MaterialTheme.typography.titleMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(layout.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f), maxLines = 1)
+                if (onEdit != null) {
+                    IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Filled.Edit, "Edit", Modifier.size(18.dp))
+                    }
+                }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     layout.difficulty.label(),
