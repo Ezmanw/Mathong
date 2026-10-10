@@ -62,6 +62,7 @@ data class GameUiState(
     val shakeKey: Int = 0,
     val mode: GameMode = GameMode.CLASSIC,
     val timeLeftMs: Long = 0,
+    val dealId: Long = 0,
 ) {
     val layout: Layout? get() = board?.layout
 }
@@ -182,7 +183,7 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
     }
 
     private fun fresh(board: Board, seed: Long, daily: String?) = GameUiState(
-        board = board, seed = seed, status = GameStatus.PLAYING, daily = daily, mode = mode,
+        board = board, seed = seed, status = GameStatus.PLAYING, daily = daily, mode = mode, dealId = System.nanoTime(),
         timeLeftMs = if (mode == GameMode.TIME_ATTACK) timeAttackStart(board.layout) else 0,
     )
 
@@ -206,6 +207,7 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
         _state.value = GameUiState(
             mode = saved.mode,
             timeLeftMs = saved.timeLeftMs,
+            dealId = System.nanoTime(),
             board = board,
             seed = saved.seed,
             history = saved.history,
@@ -472,6 +474,7 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
                     selected = null,
                     hint = null,
                     redo = emptyList(),
+                    dealId = System.nanoTime(),
                     shufflesUsed = it.shufflesUsed + if (penalty && it.mode != GameMode.ZEN) 1 else 0,
                     score = if (penalty) (it.score - 50).coerceAtLeast(0) else it.score,
                     status = GameStatus.PLAYING,

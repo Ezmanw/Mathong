@@ -93,5 +93,6 @@ class ScreenshotTest {
 
     @Test fun turtle() = board("turtle", Settings())
     @Test fun pyramidFelt() = board("pyramid", Settings(background = BoardBackground.FELT, tileTheme = TileTheme.IVORY), 10)
+    @Test fun pocketSimple() = board("pocket", Settings(simpleFaces = true, tileTheme = TileTheme.AMBER))
     @Test fun pocketIndices() = board("pocket", Settings(showIndices = true, tileTheme = TileTheme.SAPPHIRE))
 }

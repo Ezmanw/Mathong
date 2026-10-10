@@ -69,10 +69,14 @@ class GlyphCache(private val measurer: TextMeasurer) {
 }
 
 /** Draws the face artwork of [kind] into the rect at [o] with size [s]. */
-fun DrawScope.drawTileFace(kind: TileKind, o: Offset, s: Size, glyphs: GlyphCache, showIndex: Boolean) {
+fun DrawScope.drawTileFace(kind: TileKind, o: Offset, s: Size, glyphs: GlyphCache, showIndex: Boolean, simple: Boolean = false) {
     val pad = s.width * 0.1f
     val inner = Size(s.width - pad * 2, s.height - pad * 2)
     val io = Offset(o.x + pad, o.y + pad)
+    if (simple && drawSimpleFace(kind, io, inner, glyphs)) {
+        if (showIndex && (kind.suit == Suit.DOTS || kind.suit == Suit.BAMBOO)) drawIndex(kind, o, s, glyphs)
+        return
+    }
     when (kind.suit) {
         Suit.DOTS -> drawDots(kind.rank, io, inner)
         Suit.BAMBOO -> drawBamboo(kind.rank, io, inner)
@@ -107,6 +111,57 @@ fun DrawScope.drawTileFace(kind: TileKind, o: Offset, s: Size, glyphs: GlyphCach
         }
     }
     if (showIndex) drawIndex(kind, o, s, glyphs)
+}
+
+/**
+ * Western-style faces for characters, honours and bonus tiles. Dots and bamboo keep their
+ * pictures but gain a rank number. Returns false when the traditional face should be drawn.
+ */
+private fun DrawScope.drawSimpleFace(kind: TileKind, io: Offset, inner: Size, glyphs: GlyphCache): Boolean {
+    fun label(text: String, cy: Float, frac: Float, color: Color, bold: Boolean = true) {
+        val t = glyphs.layout(text, inner.height * frac, color, density, bold)
+        val scale = (inner.width / t.size.width).coerceAtMost(1f)
+        if (scale < 1f) {
+            val t2 = glyphs.layout(text, inner.height * frac * scale, color, density, bold)
+            drawText(t2, topLeft = Offset(io.x + (inner.width - t2.size.width) / 2, io.y + inner.height * cy - t2.size.height / 2))
+        } else {
+            drawText(t, topLeft = Offset(io.x + (inner.width - t.size.width) / 2, io.y + inner.height * cy - t.size.height / 2))
+        }
+    }
+    when (kind.suit) {
+        Suit.DOTS, Suit.BAMBOO -> return false
+        Suit.CHARACTERS -> {
+            label(kind.rank.toString(), 0.4f, 0.62f, Red)
+            label("CRAK", 0.86f, 0.17f, Ink)
+        }
+        Suit.WIND -> {
+            label(listOf("E", "S", "W", "N")[kind.rank - 1], 0.4f, 0.62f, Ink)
+            label(listOf("EAST", "SOUTH", "WEST", "NORTH")[kind.rank - 1], 0.86f, 0.17f, Blue)
+        }
+        Suit.DRAGON -> {
+            when (kind.rank) {
+                1 -> { drawCircle(Red, inner.width * 0.42f, Offset(io.x + inner.width / 2, io.y + inner.height * 0.4f)); label("R", 0.4f, 0.5f, Color.White) }
+                2 -> { drawCircle(Green, inner.width * 0.42f, Offset(io.x + inner.width / 2, io.y + inner.height * 0.4f)); label("G", 0.4f, 0.5f, Color.White) }
+                else -> {
+                    val c = Offset(io.x + inner.width / 2, io.y + inner.height * 0.4f)
+                    drawCircle(Blue, inner.width * 0.42f, c, style = Stroke(inner.width * 0.08f))
+                    label("W", 0.4f, 0.45f, Blue)
+                }
+            }
+            label("DRAGON", 0.86f, 0.15f, Ink)
+        }
+        Suit.FLOWER -> {
+            val c = listOf(Red, Purple, Orange, Green)[kind.rank - 1]
+            drawBlossom(Offset(io.x + inner.width * 0.5f, io.y + inner.height * 0.38f), inner.width * 0.45f, c)
+            label(listOf("PLUM", "ORCHID", "MUM", "BAMBOO")[kind.rank - 1], 0.86f, 0.15f, c)
+        }
+        Suit.SEASON -> {
+            val c = listOf(Green, Red, Orange, Blue)[kind.rank - 1]
+            drawSun(Offset(io.x + inner.width * 0.5f, io.y + inner.height * 0.38f), inner.width * 0.3f, c)
+            label(listOf("SPRING", "SUMMER", "AUTUMN", "WINTER")[kind.rank - 1], 0.86f, 0.15f, c)
+        }
+    }
+    return true
 }
 
 private val NUMERALS = listOf("一", "二", "三", "四", "五", "六", "七", "八", "九")
@@ -293,6 +348,7 @@ fun DrawScope.drawTile(
     highlight: Color? = null,
     dim: Float = 0f,
     alpha: Float = 1f,
+    simple: Boolean = false,
 ) {
     if (alpha < 0.99f) {
         if (alpha <= 0.01f) return
@@ -302,10 +358,10 @@ fun DrawScope.drawTile(
             faceOrigin.x + size.width + depth * 2 + pad, faceOrigin.y + size.height + depth * 2 + pad,
         )
         drawContext.canvas.saveLayer(bounds, androidx.compose.ui.graphics.Paint().apply { this.alpha = alpha })
-        drawTileOpaque(kind, faceOrigin, size, depth, palette, glyphs, showIndex, highlight, dim)
+        drawTileOpaque(kind, faceOrigin, size, depth, palette, glyphs, showIndex, highlight, dim, simple)
         drawContext.canvas.restore()
     } else {
-        drawTileOpaque(kind, faceOrigin, size, depth, palette, glyphs, showIndex, highlight, dim)
+        drawTileOpaque(kind, faceOrigin, size, depth, palette, glyphs, showIndex, highlight, dim, simple)
     }
 }
 
@@ -319,6 +375,7 @@ private fun DrawScope.drawTileOpaque(
     showIndex: Boolean,
     highlight: Color?,
     dim: Float,
+    simple: Boolean,
 ) {
     val corner = CornerRadius(size.width * 0.12f)
     // drop shadow
@@ -332,7 +389,7 @@ private fun DrawScope.drawTileOpaque(
         Brush.linearGradient(listOf(palette.faceTop, palette.faceBottom), faceOrigin, faceOrigin + Offset(size.width, size.height)),
         faceOrigin, size, corner,
     )
-    drawTileFace(kind, faceOrigin, size, glyphs, showIndex)
+    drawTileFace(kind, faceOrigin, size, glyphs, showIndex, simple)
     if (highlight != null) {
         drawRoundRect(highlight.copy(alpha = 0.28f * highlight.alpha), faceOrigin, size, corner)
         drawRoundRect(highlight, faceOrigin, size, corner, style = Stroke(size.width * 0.07f))

@@ -24,6 +24,7 @@ import com.ezmanw.mathong.ui.editor.EditorScreen
 import com.ezmanw.mathong.ui.achievements.AchievementsScreen
 import com.ezmanw.mathong.ui.game.GameScreen
 import com.ezmanw.mathong.ui.help.HowToPlayScreen
+import com.ezmanw.mathong.ui.help.TutorialScreen
 import com.ezmanw.mathong.ui.home.HomeScreen
 import com.ezmanw.mathong.ui.layouts.LayoutPickerScreen
 import com.ezmanw.mathong.ui.settings.SettingsScreen
@@ -53,6 +54,7 @@ private object Routes {
     const val SETTINGS = "settings"
     const val HELP = "help"
     const val EDITOR = "editor?id={id}"
+    const val TUTORIAL = "tutorial"
 
     fun editor(id: String? = null) = "editor?id=${id ?: ""}"
 
@@ -83,6 +85,7 @@ private fun MathongNavHost(nav: NavHostController) {
                 onAchievements = { nav.navigate(Routes.ACHIEVEMENTS) },
                 onSettings = { nav.navigate(Routes.SETTINGS) },
                 onHelp = { nav.navigate(Routes.HELP) },
+                onTutorial = { nav.navigate(Routes.TUTORIAL) },
             )
         }
         composable(Routes.LAYOUTS) {
@@ -119,9 +122,12 @@ private fun MathongNavHost(nav: NavHostController) {
                 onPlay = { openGame(Routes.game(it)) },
             )
         }
+        composable(Routes.TUTORIAL) {
+            TutorialScreen(onBack = { nav.popBackStack() }, onDone = { nav.popBackStack(Routes.HOME, inclusive = false) })
+        }
         composable(Routes.STATS) { StatsScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.ACHIEVEMENTS) { AchievementsScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.SETTINGS) { SettingsScreen(onBack = { nav.popBackStack() }) }
-        composable(Routes.HELP) { HowToPlayScreen(onBack = { nav.popBackStack() }) }
+        composable(Routes.HELP) { HowToPlayScreen(onBack = { nav.popBackStack() }, onTutorial = { nav.navigate(Routes.TUTORIAL) }) }
     }
 }

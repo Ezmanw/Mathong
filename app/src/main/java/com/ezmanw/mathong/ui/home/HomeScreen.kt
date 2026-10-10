@@ -73,6 +73,7 @@ fun HomeScreen(
     onAchievements: () -> Unit,
     onSettings: () -> Unit,
     onHelp: () -> Unit,
+    onTutorial: () -> Unit,
 ) {
     val repo = repository()
     val saved by repo.savedGame.collectAsState(initial = null)
@@ -104,7 +105,7 @@ fun HomeScreen(
                             )
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                                 TextButton(onClick = { scope.launch { repo.setSeenTutorial() } }) { Text("Got it") }
-                                TextButton(onClick = { scope.launch { repo.setSeenTutorial() }; onHelp() }) { Text("Learn more") }
+                                TextButton(onClick = onTutorial) { Text("Try the tutorial") }
                             }
                         }
                     }
@@ -179,8 +180,8 @@ private fun Header(settings: Settings) {
             val tiles = listOf(TileKind(31), TileKind(0), TileKind(32), TileKind(9), TileKind(27))
             tiles.forEachIndexed { i, k ->
                 TilePreview(
-                    k, settings.tileTheme, 46.dp,
-                    Modifier.graphicsLayer {
+                    k, settings.tileTheme, 46.dp, simple = settings.simpleFaces,
+                    modifier = Modifier.graphicsLayer {
                         rotationZ = (i - 2) * 6f
                         translationY = ((if (i % 2 == 0) bob else -bob) * 4f - kotlin.math.abs(i - 2) * -6f).dp.toPx()
                     },

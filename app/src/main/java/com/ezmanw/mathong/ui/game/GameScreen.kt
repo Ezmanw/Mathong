@@ -56,6 +56,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -119,6 +120,10 @@ fun GameScreen(
     var menuOpen by remember { mutableStateOf(false) }
     var confirmNew by remember { mutableStateOf(false) }
 
+    DisposableEffect(view) {
+        view.keepScreenOn = true
+        onDispose { view.keepScreenOn = false }
+    }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { vm.setVisible(false); vm.pause() }
     LifecycleEventEffect(Lifecycle.Event.ON_START) { vm.setVisible(true) }
 
@@ -255,6 +260,7 @@ fun GameScreen(
                                         shakeTile = state.shakeTile,
                                         shakeKey = state.shakeKey,
                                         settings = settings,
+                                        dealId = state.dealId,
                                         onTap = vm::tapTile,
                                         modifier = Modifier.fillMaxSize(),
                                     )

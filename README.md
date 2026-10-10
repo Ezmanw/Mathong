@@ -12,7 +12,8 @@ Mahjong Solitaire for Android, built with Kotlin, Jetpack Compose and Material 3
 - Combo scoring, time bonus, star ratings, per-layout best times
 - Achievements and statistics with a pace chart
 - Landscape layout with navigation rail
-- Material You dynamic color, light/dark mode, tile styles, board backgrounds, corner labels
+- Material You dynamic color, light/dark mode, tile styles, traditional or simple faces, board backgrounds, corner labels
+- Interactive tutorial
 - Synthesized sound effects, haptics, pinch-to-zoom, auto-save/resume
 
 ## Building

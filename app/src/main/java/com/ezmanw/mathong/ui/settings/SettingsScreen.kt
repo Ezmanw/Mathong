@@ -106,7 +106,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 .padding(10.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            TilePreview(TileKind(31), t, 40.dp, showIndex = s.showIndices)
+                            TilePreview(TileKind(31), t, 40.dp, showIndex = s.showIndices, simple = s.simpleFaces)
                             Spacer(Modifier.height(4.dp))
                             Text(t.label, style = MaterialTheme.typography.labelMedium)
                         }
@@ -129,6 +129,29 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 Box(Modifier.size(18.dp).clip(CircleShape).background(boardBrush(b)))
                             },
                         )
+                    }
+                }
+                Text("Tile faces", Modifier.padding(start = 16.dp, top = 8.dp), style = MaterialTheme.typography.bodyLarge)
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    listOf(false to "Traditional", true to "Simple").forEach { (simple, label) ->
+                        val selected = s.simpleFaces == simple
+                        Column(
+                            Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .border(
+                                    BorderStroke(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                                    RoundedCornerShape(16.dp),
+                                )
+                                .clickable { update { it.copy(simpleFaces = simple) } }
+                                .padding(10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                listOf(22, 27, 32).forEach { TilePreview(TileKind(it), s.tileTheme, 30.dp, simple = simple) }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(label, style = MaterialTheme.typography.labelMedium)
+                        }
                     }
                 }
                 SwitchRow("Corner labels", "Show a small rank label on every tile", s.showIndices) { v -> update { it.copy(showIndices = v) } }

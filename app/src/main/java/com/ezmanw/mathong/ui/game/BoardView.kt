@@ -35,6 +35,8 @@ import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.ezmanw.mathong.data.Settings
 import com.ezmanw.mathong.game.Board
 import com.ezmanw.mathong.ui.tiles.GlyphCache
@@ -93,6 +95,7 @@ fun BoardView(
     shakeTile: Int?,
     shakeKey: Int,
     settings: Settings,
+    dealId: Long = 0L,
     onTap: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -110,11 +113,11 @@ fun BoardView(
     // Animate tiles that just disappeared: a matched pair slides together, lifts and fades.
     val flying = remember { mutableStateMapOf<Int, Flight>() }
     var previous by remember { mutableStateOf<BooleanArray?>(null) }
-    var metricsRef by remember { mutableStateOf<BoardMetrics?>(null) }
+    val metricsHolder = remember { arrayOfNulls<BoardMetrics>(1) }
     LaunchedEffect(board) {
         val prev = previous
         previous = board.present.copyOf()
-        val m = metricsRef
+        val m = metricsHolder[0]
         if (prev != null && prev.size == board.present.size && m != null) {
             val gone = prev.indices.filter { prev[it] && !board.present[it] }
             if (gone.size == 2) {
@@ -149,6 +152,19 @@ fun BoardView(
         else freeSet.filter { it != selected && board.kind(it).matches(board.kind(selected)) }.toSet()
     }
 
+    // Deal-in animation: tiles drop onto the table layer by layer.
+    val deal = remember { Animatable(1f) }
+    val dealRank = remember(board.layout) {
+        val order = drawOrder
+        IntArray(order.size).also { r -> order.forEachIndexed { k, slot -> r[slot] = k } }
+    }
+    LaunchedEffect(dealId) {
+        if (dealId != 0L) {
+            deal.snapTo(0f)
+            deal.animateTo(1f, tween(900, easing = LinearEasing))
+        }
+    }
+
     // Shake a blocked tile that was tapped.
     val shake = remember { Animatable(0f) }
     LaunchedEffect(shakeKey) {
@@ -172,11 +188,20 @@ fun BoardView(
         val w = constraints.maxWidth.toFloat()
         val h = constraints.maxHeight.toFloat()
         val metrics = remember(board.layout, w, h) { BoardMetrics(board, w, h, with(density) { 8.dp.toPx() }) }
-        metricsRef = metrics
+        metricsHolder[0] = metrics
 
+        val freeCount = freeSet.size
+        val remainingPairs = board.remaining / 2
+        val selectedName = selected?.let { board.kind(it).displayName }
         Canvas(
             Modifier
                 .fillMaxSize()
+                .semantics {
+                    contentDescription = buildString {
+                        append("Mahjong board, $remainingPairs pairs left, $freeCount free tiles.")
+                        if (selectedName != null) append(" Selected: $selectedName.")
+                    }
+                }
                 .pointerInput(w, h) {
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
@@ -227,6 +252,14 @@ fun BoardView(
             for (i in drawOrder) {
                 if (!board.present[i]) continue
                 var origin = metrics.faceOrigin(i)
+                var dealAlpha = 1f
+                if (deal.value < 1f) {
+                    val delay = dealRank[i].toFloat() / dealRank.size * 0.6f
+                    val t = ((deal.value - delay) / 0.4f).coerceIn(0f, 1f)
+                    val e = 1 - t
+                    origin -= Offset(0f, e * e * metrics.tileH * 1.2f)
+                    dealAlpha = t
+                }
                 if (shakeTile == i && shake.value > 0f) {
                     origin += Offset(sin(shake.value * 30f) * metrics.tileW * 0.08f * shake.value, 0f)
                 }
@@ -245,8 +278,10 @@ fun BoardView(
                     palette = palette,
                     glyphs = glyphs,
                     showIndex = settings.showIndices,
+                    simple = settings.simpleFaces,
                     highlight = highlight,
                     dim = dim,
+                    alpha = dealAlpha,
                 )
             }
             // Removed tiles fly above the board.
@@ -264,6 +299,7 @@ fun BoardView(
                     palette = palette,
                     glyphs = glyphs,
                     showIndex = settings.showIndices,
+                    simple = settings.simpleFaces,
                     highlight = colors.primary.copy(alpha = 1f - fade),
                     alpha = 1f - fade,
                 )

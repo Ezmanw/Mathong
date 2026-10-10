@@ -46,13 +46,13 @@ fun BackTopBar(title: String, onBack: () -> Unit, scrollBehavior: TopAppBarScrol
 
 /** A single decorative tile. */
 @Composable
-fun TilePreview(kind: TileKind, theme: TileTheme, width: Dp, modifier: Modifier = Modifier, showIndex: Boolean = false) {
+fun TilePreview(kind: TileKind, theme: TileTheme, width: Dp, modifier: Modifier = Modifier, showIndex: Boolean = false, simple: Boolean = false) {
     val measurer = rememberTextMeasurer()
     val glyphs = remember(measurer) { GlyphCache(measurer) }
     Canvas(modifier.size(width * 1.15f, width * 1.32f * 1.12f)) {
         val w = size.width / 1.15f
         val h = w * 1.32f
-        drawTile(kind, Offset.Zero, Size(w, h), w * 0.13f, theme.palette(), glyphs, showIndex)
+        drawTile(kind, Offset.Zero, Size(w, h), w * 0.13f, theme.palette(), glyphs, showIndex, simple = simple)
     }
 }
 

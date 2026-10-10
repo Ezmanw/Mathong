@@ -31,6 +31,7 @@ data class Settings(
     val smartHints: Boolean = true,
     val autoShuffle: Boolean = false,
     val showMatches: Boolean = false,
+    val simpleFaces: Boolean = false,
 )
 
 @Serializable

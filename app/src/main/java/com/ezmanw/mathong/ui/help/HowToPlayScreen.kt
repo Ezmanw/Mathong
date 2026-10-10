@@ -35,7 +35,7 @@ import com.ezmanw.mathong.ui.common.repository
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun HowToPlayScreen(onBack: () -> Unit) {
+fun HowToPlayScreen(onBack: () -> Unit, onTutorial: () -> Unit = {}) {
     val settings by repository().settings.collectAsState(initial = Settings())
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
@@ -47,6 +47,9 @@ fun HowToPlayScreen(onBack: () -> Unit) {
                 Modifier.widthIn(max = 640.dp).verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                androidx.compose.material3.FilledTonalButton(onClick = onTutorial, modifier = Modifier.fillMaxWidth()) {
+                    Text("Play the interactive tutorial")
+                }
                 Block("Goal", "Clear every tile from the board by removing matching pairs.")
                 Block(
                     "Free tiles",
@@ -101,8 +104,8 @@ private fun Block(title: String, body: String) {
 @Composable
 private fun Pair(a: TileKind, b: TileKind, s: Settings) {
     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        TilePreview(a, s.tileTheme, 36.dp, showIndex = s.showIndices)
-        TilePreview(b, s.tileTheme, 36.dp, showIndex = s.showIndices)
+        TilePreview(a, s.tileTheme, 36.dp, showIndex = s.showIndices, simple = s.simpleFaces)
+        TilePreview(b, s.tileTheme, 36.dp, showIndex = s.showIndices, simple = s.simpleFaces)
     }
 }
 
@@ -111,6 +114,6 @@ private fun Pair(a: TileKind, b: TileKind, s: Settings) {
 private fun SuitRow(name: String, kinds: List<TileKind>, s: Settings) {
     Text(name, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        kinds.forEach { TilePreview(it, s.tileTheme, 30.dp, showIndex = s.showIndices) }
+        kinds.forEach { TilePreview(it, s.tileTheme, 30.dp, showIndex = s.showIndices, simple = s.simpleFaces) }
     }
 }

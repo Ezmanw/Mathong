@@ -55,7 +55,7 @@ class EditorViewModel(app: Application, savedState: SavedStateHandle) : AndroidV
             if (!LayoutRegistry.loaded) repo.syncCustomLayouts()
             val existing = id?.let { LayoutRegistry.find(it) }
             if (existing != null && LayoutRegistry.isCustom(existing.id)) {
-                _state.value = EditorState(id = existing.id, name = existing.name, slots = existing.slots)
+                _state.value = EditorState(id = existing.id, name = existing.name, slots = centered(existing))
             }
         }
     }
@@ -107,7 +107,9 @@ class EditorViewModel(app: Application, savedState: SavedStateHandle) : AndroidV
     }
 
     /** Fills the canvas with a centred copy of a built-in layout. */
-    fun loadTemplate(layout: Layout) {
+    fun loadTemplate(layout: Layout) = push(centered(layout))
+
+    private fun centered(layout: Layout): List<Slot> {
         val w = layout.maxX - layout.minX
         val h = layout.maxY - layout.minY
         // Keep offsets even so templates stay on the full-tile grid and symmetric about the mirror axis.
@@ -115,7 +117,7 @@ class EditorViewModel(app: Application, savedState: SavedStateHandle) : AndroidV
         val oy = ((GRID_H - h) / 4) * 2 - layout.minY
         val slots = layout.slots.map { Slot(it.x + ox, it.y + oy, it.z) }
             .filter { it.x in 0..GRID_W - 2 && it.y in 0..GRID_H - 2 && it.z < MAX_LAYERS }
-        push(slots)
+        return slots
     }
 
     /** Validates and saves. Calls [onSaved] with the layout id on success. */

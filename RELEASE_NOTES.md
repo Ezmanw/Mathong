@@ -1,16 +1,16 @@
-## Mathong v1.2 — Mahjong Solitaire
+## Mathong v1.3 — Mahjong Solitaire
 
 ### New
-- **Layout editor** — design your own boards: tap to place tiles, up to 8 layers, mirror symmetry, half-step placement, undo, start from any built-in layout. Every custom layout is checked so it always deals solvably, then appears under *Your layouts*.
-- **Game modes**
-  - **Time Attack** — race a countdown; every match adds 4 seconds and combos add more
-  - **Zen** — no timer, no score, free hints; just you and the tiles
-- **Share your result** from the win screen (great for the Daily Challenge)
-- 4 new achievements: Beat the Clock, Photo Finish, Inner Peace, Architect
-- Statistics now track Time Attack and Zen games
+- **Interactive tutorial** — a guided mini board that teaches free and blocked tiles step by step (Home → *Try the tutorial*, or from How to play)
+- **Simple tile faces** — optional Western-style faces (E/S/W/N, R/G/W dragons, numbered "CRAK" characters, named flowers and seasons) for easier reading
+- **Deal animation** — tiles drop onto the table layer by layer when a game starts, resumes or is shuffled
+- Screen stays awake while you play
+- TalkBack describes the board state (pairs left, free tiles, current selection)
+- The layout editor now centres existing custom layouts when you open them
 
 ### Previously
-- v1.1: 8 new layouts (22 total), auto-finish, match animation, matching-tile assist, landscape mode, pace chart
-- v1: solvable deals, smart hints, undo/redo, shuffle, daily challenge, achievements, Material You theming, tile styles, sounds and haptics
+- v1.2: layout editor, Time Attack and Zen modes, result sharing
+- v1.1: 22 layouts, auto-finish, match animation, landscape mode, pace chart
+- v1: solvable deals, smart hints, daily challenge, achievements, Material You theming
 
 Install `Mathong-<tag>.apk` (release build). It upgrades in place over earlier releases.
