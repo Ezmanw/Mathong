@@ -294,26 +294,47 @@ fun DrawScope.drawTile(
     dim: Float = 0f,
     alpha: Float = 1f,
 ) {
+    if (alpha < 0.99f) {
+        if (alpha <= 0.01f) return
+        val pad = depth * 2
+        val bounds = androidx.compose.ui.geometry.Rect(
+            faceOrigin.x - pad, faceOrigin.y - pad,
+            faceOrigin.x + size.width + depth * 2 + pad, faceOrigin.y + size.height + depth * 2 + pad,
+        )
+        drawContext.canvas.saveLayer(bounds, androidx.compose.ui.graphics.Paint().apply { this.alpha = alpha })
+        drawTileOpaque(kind, faceOrigin, size, depth, palette, glyphs, showIndex, highlight, dim)
+        drawContext.canvas.restore()
+    } else {
+        drawTileOpaque(kind, faceOrigin, size, depth, palette, glyphs, showIndex, highlight, dim)
+    }
+}
+
+private fun DrawScope.drawTileOpaque(
+    kind: TileKind,
+    faceOrigin: Offset,
+    size: Size,
+    depth: Float,
+    palette: TilePalette,
+    glyphs: GlyphCache,
+    showIndex: Boolean,
+    highlight: Color?,
+    dim: Float,
+) {
     val corner = CornerRadius(size.width * 0.12f)
     // drop shadow
-    drawRoundRect(Color.Black.copy(alpha = 0.18f * alpha), faceOrigin + Offset(depth * 1.6f, depth * 1.8f), size, corner)
+    drawRoundRect(Color.Black.copy(alpha = 0.18f), faceOrigin + Offset(depth * 1.6f, depth * 1.8f), size, corner)
     // body layers
-    drawRoundRect(palette.sideDark, faceOrigin + Offset(depth, depth), size, corner, alpha = alpha)
-    drawRoundRect(palette.side, faceOrigin + Offset(depth * 0.55f, depth * 0.55f), size, corner, alpha = alpha)
-    drawRoundRect(palette.border, faceOrigin + Offset(depth * 0.2f, depth * 0.2f), size, corner, alpha = alpha)
+    drawRoundRect(palette.sideDark, faceOrigin + Offset(depth, depth), size, corner)
+    drawRoundRect(palette.side, faceOrigin + Offset(depth * 0.55f, depth * 0.55f), size, corner)
+    drawRoundRect(palette.border, faceOrigin + Offset(depth * 0.2f, depth * 0.2f), size, corner)
     // face
     drawRoundRect(
         Brush.linearGradient(listOf(palette.faceTop, palette.faceBottom), faceOrigin, faceOrigin + Offset(size.width, size.height)),
-        faceOrigin, size, corner, alpha = alpha,
+        faceOrigin, size, corner,
     )
-    if (alpha >= 0.99f) {
-        drawTileFace(kind, faceOrigin, size, glyphs, showIndex)
-    } else {
-        // Faces fade as part of removal; skip glyph detail at low alpha to keep frames cheap.
-        if (alpha > 0.4f) drawTileFace(kind, faceOrigin, size, glyphs, showIndex)
-    }
+    drawTileFace(kind, faceOrigin, size, glyphs, showIndex)
     if (highlight != null) {
-        drawRoundRect(highlight.copy(alpha = 0.28f), faceOrigin, size, corner)
+        drawRoundRect(highlight.copy(alpha = 0.28f * highlight.alpha), faceOrigin, size, corner)
         drawRoundRect(highlight, faceOrigin, size, corner, style = Stroke(size.width * 0.07f))
     }
     if (dim > 0f) drawRoundRect(Color.Black.copy(alpha = dim), faceOrigin, size, corner)

@@ -29,6 +29,7 @@ class Repository(private val context: Context) {
         val showTimer = booleanPreferencesKey("show_timer")
         val smartHints = booleanPreferencesKey("smart_hints")
         val autoShuffle = booleanPreferencesKey("auto_shuffle")
+        val showMatches = booleanPreferencesKey("show_matches")
         val stats = stringPreferencesKey("stats")
         val savedGame = stringPreferencesKey("saved_game")
         val lastLayout = stringPreferencesKey("last_layout")
@@ -52,6 +53,7 @@ class Repository(private val context: Context) {
             showTimer = p[Keys.showTimer] ?: d.showTimer,
             smartHints = p[Keys.smartHints] ?: d.smartHints,
             autoShuffle = p[Keys.autoShuffle] ?: d.autoShuffle,
+            showMatches = p[Keys.showMatches] ?: d.showMatches,
         )
     }
 
@@ -69,6 +71,7 @@ class Repository(private val context: Context) {
             p[Keys.showTimer] = s.showTimer
             p[Keys.smartHints] = s.smartHints
             p[Keys.autoShuffle] = s.autoShuffle
+            p[Keys.showMatches] = s.showMatches
         }
     }
 

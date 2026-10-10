@@ -85,6 +85,9 @@ fun StatsScreen(onBack: () -> Unit) {
                     StatTile("Dailies", stats.dailyCompleted.size.toString(), Modifier.weight(1f))
                 }
 
+                Text("Pace", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+                PaceChart(stats.recent)
+
                 Text("Daily challenges", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
                 DailyCalendar(stats.dailyCompleted)
 

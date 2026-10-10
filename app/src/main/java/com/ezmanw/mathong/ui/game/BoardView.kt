@@ -47,6 +47,8 @@ import kotlin.math.sin
 private const val ASPECT = 1.32f      // tile height / width
 private const val DEPTH = 0.13f       // depth as a fraction of tile width
 
+class Flight(val progress: Animatable<Float, *>, val from: Offset, val to: Offset)
+
 /** Pixel geometry for drawing a layout into a given box. */
 class BoardMetrics(board: Board, width: Float, height: Float, zoomPad: Float) {
     private val layout = board.layout
@@ -105,22 +107,46 @@ fun BoardView(
         board.layout.slots.indices.sortedWith(compareBy({ board.layout.slots[it].z }, { board.layout.slots[it].x }, { board.layout.slots[it].y }))
     }
 
-    // Animate tiles that just disappeared.
-    val fading = remember { mutableStateMapOf<Int, Animatable<Float, *>>() }
+    // Animate tiles that just disappeared: a matched pair slides together, lifts and fades.
+    val flying = remember { mutableStateMapOf<Int, Flight>() }
     var previous by remember { mutableStateOf<BooleanArray?>(null) }
+    var metricsRef by remember { mutableStateOf<BoardMetrics?>(null) }
     LaunchedEffect(board) {
         val prev = previous
         previous = board.present.copyOf()
-        if (prev != null && prev.size == board.present.size) {
-            for (i in prev.indices) if (prev[i] && !board.present[i]) {
-                val a = Animatable(1f)
-                fading[i] = a
-                scope.launch {
-                    a.animateTo(0f, tween(320, easing = FastOutSlowInEasing))
-                    fading.remove(i)
+        val m = metricsRef
+        if (prev != null && prev.size == board.present.size && m != null) {
+            val gone = prev.indices.filter { prev[it] && !board.present[it] }
+            if (gone.size == 2) {
+                val (a, b) = gone.sortedBy { m.faceOrigin(it).x }
+                val oa = m.faceOrigin(a); val ob = m.faceOrigin(b)
+                val mid = (oa + ob) / 2f
+                val ta = mid - Offset(m.tileW * 0.52f, m.tileH * 0.15f)
+                val tb = mid + Offset(m.tileW * 0.52f, -m.tileH * 0.15f)
+                listOf(a to ta, b to tb).forEach { (i, target) ->
+                    val anim = Animatable(0f)
+                    flying[i] = Flight(anim, m.faceOrigin(i), target)
+                    scope.launch {
+                        anim.animateTo(1f, tween(460, easing = FastOutSlowInEasing))
+                        flying.remove(i)
+                    }
+                }
+            } else {
+                gone.forEach { i ->
+                    val anim = Animatable(0f)
+                    flying[i] = Flight(anim, m.faceOrigin(i), m.faceOrigin(i) - Offset(0f, m.tileH * 0.3f))
+                    scope.launch {
+                        anim.animateTo(1f, tween(320))
+                        flying.remove(i)
+                    }
                 }
             }
         }
+    }
+    val freeSet = remember(board) { board.freeTiles().toHashSet() }
+    val matchSet = remember(board, selected, settings.showMatches) {
+        if (selected == null || !settings.showMatches || !board.present[selected]) emptySet()
+        else freeSet.filter { it != selected && board.kind(it).matches(board.kind(selected)) }.toSet()
     }
 
     // Shake a blocked tile that was tapped.
@@ -146,6 +172,7 @@ fun BoardView(
         val w = constraints.maxWidth.toFloat()
         val h = constraints.maxHeight.toFloat()
         val metrics = remember(board.layout, w, h) { BoardMetrics(board, w, h, with(density) { 8.dp.toPx() }) }
+        metricsRef = metrics
 
         Canvas(
             Modifier
@@ -198,26 +225,18 @@ fun BoardView(
         ) {
             val size = metrics.faceSize
             for (i in drawOrder) {
-                val present = board.present[i]
-                val fade = fading[i]
-                if (!present && fade == null) continue
+                if (!board.present[i]) continue
                 var origin = metrics.faceOrigin(i)
-                var alpha = 1f
-                if (!present && fade != null) {
-                    val v = fade.value
-                    alpha = v
-                    origin += Offset(0f, -(1 - v) * metrics.tileH * 0.35f)
-                }
                 if (shakeTile == i && shake.value > 0f) {
                     origin += Offset(sin(shake.value * 30f) * metrics.tileW * 0.08f * shake.value, 0f)
                 }
                 val highlight = when {
-                    !present -> null
                     selected == i -> colors.primary
                     hint?.let { it.first == i || it.second == i } == true -> colors.tertiary.copy(alpha = pulse)
+                    i in matchSet -> colors.secondary
                     else -> null
                 }
-                val dim = if (present && settings.highlightFree && highlight == null && !board.isFree(i)) 0.22f else 0f
+                val dim = if (settings.highlightFree && highlight == null && i !in freeSet) 0.22f else 0f
                 drawTile(
                     kind = board.kind(i),
                     faceOrigin = origin,
@@ -228,7 +247,25 @@ fun BoardView(
                     showIndex = settings.showIndices,
                     highlight = highlight,
                     dim = dim,
-                    alpha = alpha,
+                )
+            }
+            // Removed tiles fly above the board.
+            for ((i, f) in flying) {
+                if (board.present[i]) continue
+                val t = f.progress.value
+                val move = (t / 0.6f).coerceAtMost(1f)
+                val fade = ((t - 0.55f) / 0.45f).coerceIn(0f, 1f)
+                val origin = f.from + (f.to - f.from) * move - Offset(0f, metrics.tileH * 0.25f * fade)
+                drawTile(
+                    kind = board.kind(i),
+                    faceOrigin = origin,
+                    size = size,
+                    depth = metrics.depth,
+                    palette = palette,
+                    glyphs = glyphs,
+                    showIndex = settings.showIndices,
+                    highlight = colors.primary.copy(alpha = 1f - fade),
+                    alpha = 1f - fade,
                 )
             }
         }

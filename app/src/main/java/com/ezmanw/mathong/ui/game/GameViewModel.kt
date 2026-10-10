@@ -9,6 +9,7 @@ import com.ezmanw.mathong.audio.Sfx
 import com.ezmanw.mathong.data.Achievements
 import com.ezmanw.mathong.data.GameResult
 import com.ezmanw.mathong.data.LayoutStats
+import com.ezmanw.mathong.data.RecentGame
 import com.ezmanw.mathong.data.SavedGame
 import com.ezmanw.mathong.data.SavedMove
 import com.ezmanw.mathong.game.Board
@@ -319,6 +320,7 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
                     totalPlayMs = st.totalPlayMs + s.elapsedMs,
                     hintsUsed = st.hintsUsed + s.hintsUsed,
                     dailyCompleted = if (s.daily != null) st.dailyCompleted + s.daily else st.dailyCompleted,
+                    recent = (st.recent + RecentGame(layout.id, s.elapsedMs, finalScore, stars, layout.size, System.currentTimeMillis(), s.daily != null)).takeLast(30),
                 )
             }
             val earned = Achievements.evaluate(updated, result)
@@ -426,6 +428,28 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
                 )
             }
             schedulePersist()
+        }
+    }
+
+    /** True when every remaining tile is free, so the rest of the game can be played automatically. */
+    fun canAutoFinish(board: Board?): Boolean =
+        board != null && !board.isCleared && (0 until board.layout.size).all { !board.present[it] || board.isFree(it) }
+
+    private var autoJob: Job? = null
+
+    fun autoFinish() {
+        if (autoJob?.isActive == true) return
+        autoJob = viewModelScope.launch {
+            while (true) {
+                val s = _state.value
+                val b = s.board ?: break
+                if (s.status != GameStatus.PLAYING || b.isCleared) break
+                val m = b.availableMatches().firstOrNull() ?: break
+                // Pace the moves so they still feel like combos.
+                lastMatchAt = System.currentTimeMillis()
+                match(m.first, m.second)
+                delay(220)
+            }
         }
     }
 

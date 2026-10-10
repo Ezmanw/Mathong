@@ -24,6 +24,7 @@ data class Settings(
     val showTimer: Boolean = true,
     val smartHints: Boolean = true,
     val autoShuffle: Boolean = false,
+    val showMatches: Boolean = false,
 )
 
 @Serializable
@@ -46,11 +47,23 @@ data class Stats(
     val bestCombo: Int = 0,
     val dailyCompleted: Set<String> = emptySet(),
     val achievements: Map<String, Long> = emptyMap(),
+    val recent: List<RecentGame> = emptyList(),
 ) {
     val gamesPlayed get() = perLayout.values.sumOf { it.played }
     val gamesWon get() = perLayout.values.sumOf { it.won }
     val winRate get() = if (gamesPlayed == 0) 0f else gamesWon.toFloat() / gamesPlayed
 }
+
+@Serializable
+data class RecentGame(
+    val layoutId: String,
+    val timeMs: Long,
+    val score: Int,
+    val stars: Int,
+    val tiles: Int,
+    val at: Long,
+    val daily: Boolean = false,
+)
 
 @Serializable
 data class SavedMove(val a: Int, val b: Int, val points: Int)

@@ -135,6 +135,7 @@ fun SettingsScreen(onBack: () -> Unit) {
 
                 Section("Gameplay")
                 SwitchRow("Dim blocked tiles", "Make free tiles easy to spot", s.highlightFree) { v -> update { it.copy(highlightFree = v) } }
+                SwitchRow("Show matching tiles", "Outline free tiles that match your selection", s.showMatches) { v -> update { it.copy(showMatches = v) } }
                 SwitchRow("Smart hints", "Hints look ahead and avoid dead ends", s.smartHints) { v -> update { it.copy(smartHints = v) } }
                 SwitchRow("Auto shuffle", "Shuffle automatically when no moves remain", s.autoShuffle) { v -> update { it.copy(autoShuffle = v) } }
                 SwitchRow("Show timer", null, s.showTimer) { v -> update { it.copy(showTimer = v) } }

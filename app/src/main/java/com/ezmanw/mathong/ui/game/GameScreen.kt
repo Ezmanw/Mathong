@@ -14,6 +14,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -42,6 +45,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -138,91 +142,136 @@ fun GameScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            if (state.daily != null) "Daily Challenge" else state.layout?.name ?: "",
-                            style = MaterialTheme.typography.titleLarge,
-                        )
-                        if (state.daily != null) {
-                            Text(
-                                "${state.daily} · ${state.layout?.name ?: ""}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-                },
-                actions = {
-                    IconButton(onClick = { if (state.status == GameStatus.PAUSED) vm.resume() else vm.pause() }) {
-                        Icon(if (state.status == GameStatus.PAUSED) Icons.Filled.PlayArrow else Icons.Filled.Pause, "Pause")
-                    }
-                    Box {
-                        IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, "More") }
-                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                            DropdownMenuItem(text = { Text("New game") }, onClick = { menuOpen = false; confirmNew = true })
-                            DropdownMenuItem(text = { Text("Restart this deal") }, onClick = { menuOpen = false; vm.restart() })
-                            DropdownMenuItem(text = { Text("Change layout") }, onClick = { menuOpen = false; onChooseLayout() })
-                            DropdownMenuItem(text = { Text("How to play") }, onClick = { menuOpen = false; vm.pause(); onHelp() })
-                            DropdownMenuItem(text = { Text("Settings") }, onClick = { menuOpen = false; vm.pause(); onSettings() })
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
-            )
-        },
-        bottomBar = {
-            BottomAppBar(
-                actions = {
-                    ToolButton(Icons.AutoMirrored.Filled.Undo, "Undo", state.history.isNotEmpty()) { vm.undo() }
-                    ToolButton(Icons.AutoMirrored.Filled.Redo, "Redo", state.redo.isNotEmpty()) { vm.redo() }
-                    ToolButton(Icons.Filled.Shuffle, "Shuffle", state.status != GameStatus.WON) { vm.shuffle() }
-                },
-                floatingActionButton = {
-                    FloatingActionButton(onClick = { vm.hint() }) {
-                        Icon(Icons.Filled.Lightbulb, "Hint")
-                    }
-                },
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbar) },
-    ) { padding ->
-        Box(
-            Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .background(boardBrush(settings.background))
-        ) {
-            Column(Modifier.fillMaxSize()) {
-                Hud(state, settings.showTimer, onDarkBg = settings.background in setOf(BoardBackground.FELT, BoardBackground.WOOD, BoardBackground.NIGHT))
-                Box(Modifier.weight(1f).fillMaxWidth()) {
-                    if (state.status != GameStatus.PAUSED) {
-                        state.board?.let { b ->
-                            BoardView(
-                                board = b,
-                                selected = state.selected,
-                                hint = state.hint,
-                                shakeTile = state.shakeTile,
-                                shakeKey = state.shakeKey,
-                                settings = settings,
-                                onTap = vm::tapTile,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                    }
-                    ComboPopup(comboText, comboKey, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
-                }
+    val title = if (state.daily != null) "Daily Challenge" else state.layout?.name ?: ""
+    val paused = state.status == GameStatus.PAUSED
+    val menu: @Composable () -> Unit = {
+        Box {
+            IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, "More") }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(text = { Text("New game") }, onClick = { menuOpen = false; confirmNew = true })
+                DropdownMenuItem(text = { Text("Restart this deal") }, onClick = { menuOpen = false; vm.restart() })
+                DropdownMenuItem(text = { Text("Change layout") }, onClick = { menuOpen = false; onChooseLayout() })
+                DropdownMenuItem(text = { Text("How to play") }, onClick = { menuOpen = false; vm.pause(); onHelp() })
+                DropdownMenuItem(text = { Text("Settings") }, onClick = { menuOpen = false; vm.pause(); onSettings() })
             }
+        }
+    }
+    val pauseButton: @Composable () -> Unit = {
+        IconButton(onClick = { if (paused) vm.resume() else vm.pause() }) {
+            Icon(if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause, if (paused) "Resume" else "Pause")
+        }
+    }
 
-            if (state.status == GameStatus.PAUSED) PausedOverlay { vm.resume() }
-            if (state.status == GameStatus.LOADING) {
-                Text("Dealing…", Modifier.align(Alignment.Center), style = MaterialTheme.typography.titleMedium)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val landscape = maxWidth > maxHeight && maxHeight < 600.dp
+        Scaffold(
+            topBar = {
+                if (!landscape) {
+                    TopAppBar(
+                        title = {
+                            Column {
+                                Text(title, style = MaterialTheme.typography.titleLarge)
+                                if (state.daily != null) {
+                                    Text(
+                                        "${state.daily} · ${state.layout?.name ?: ""}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+                        },
+                        actions = { pauseButton(); menu() },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
+                    )
+                }
+            },
+            bottomBar = {
+                if (!landscape) {
+                    BottomAppBar(
+                        actions = {
+                            ToolButton(Icons.AutoMirrored.Filled.Undo, "Undo", state.history.isNotEmpty()) { vm.undo() }
+                            ToolButton(Icons.AutoMirrored.Filled.Redo, "Redo", state.redo.isNotEmpty()) { vm.redo() }
+                            ToolButton(Icons.Filled.Shuffle, "Shuffle", state.status != GameStatus.WON) { vm.shuffle() }
+                        },
+                        floatingActionButton = {
+                            FloatingActionButton(onClick = { vm.hint() }) { Icon(Icons.Filled.Lightbulb, "Hint") }
+                        },
+                    )
+                }
+            },
+            snackbarHost = { SnackbarHost(snackbar) },
+        ) { padding ->
+            Row(Modifier.padding(padding).fillMaxSize()) {
+                if (landscape) {
+                    NavigationRail(
+                        header = {
+                            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+                            pauseButton()
+                            menu()
+                        },
+                    ) {
+                        Spacer(Modifier.weight(1f))
+                        ToolButton(Icons.AutoMirrored.Filled.Undo, "Undo", state.history.isNotEmpty()) { vm.undo() }
+                        ToolButton(Icons.AutoMirrored.Filled.Redo, "Redo", state.redo.isNotEmpty()) { vm.redo() }
+                        ToolButton(Icons.Filled.Shuffle, "Shuffle", state.status != GameStatus.WON) { vm.shuffle() }
+                        Spacer(Modifier.height(8.dp))
+                        FloatingActionButton(onClick = { vm.hint() }, Modifier.padding(bottom = 12.dp)) {
+                            Icon(Icons.Filled.Lightbulb, "Hint")
+                        }
+                    }
+                }
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(boardBrush(settings.background))
+                ) {
+                    Column(Modifier.fillMaxSize()) {
+                        Hud(
+                            state, settings.showTimer,
+                            onDarkBg = settings.background in setOf(BoardBackground.FELT, BoardBackground.WOOD, BoardBackground.NIGHT),
+                            title = if (landscape) title else null,
+                        )
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            if (!paused) {
+                                state.board?.let { b ->
+                                    BoardView(
+                                        board = b,
+                                        selected = state.selected,
+                                        hint = state.hint,
+                                        shakeTile = state.shakeTile,
+                                        shakeKey = state.shakeKey,
+                                        settings = settings,
+                                        onTap = vm::tapTile,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+                            }
+                            ComboPopup(comboText, comboKey, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
+                            val canFinish = remember(state.board) { vm.canAutoFinish(state.board) }
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = canFinish && state.status == GameStatus.PLAYING,
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+                                enter = fadeIn() + scaleIn(),
+                                exit = fadeOut() + scaleOut(),
+                            ) {
+                                androidx.compose.material3.ExtendedFloatingActionButton(
+                                    onClick = { vm.autoFinish() },
+                                    icon = { Icon(Icons.Filled.DoneAll, null) },
+                                    text = { Text("Finish") },
+                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                )
+                            }
+                        }
+                    }
+                    if (paused) PausedOverlay { vm.resume() }
+                    if (state.status == GameStatus.LOADING) {
+                        Text("Dealing…", Modifier.align(Alignment.Center), style = MaterialTheme.typography.titleMedium)
+                    }
+                }
             }
         }
     }
@@ -269,7 +318,7 @@ private fun ToolButton(icon: androidx.compose.ui.graphics.vector.ImageVector, la
 }
 
 @Composable
-private fun Hud(state: GameUiState, showTimer: Boolean, onDarkBg: Boolean) {
+private fun Hud(state: GameUiState, showTimer: Boolean, onDarkBg: Boolean, title: String? = null) {
     val fg = if (onDarkBg) Color.White else MaterialTheme.colorScheme.onSurface
     Row(
         Modifier
@@ -278,6 +327,9 @@ private fun Hud(state: GameUiState, showTimer: Boolean, onDarkBg: Boolean) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (title != null) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = fg)
+        }
         if (showTimer) {
             HudChip(Icons.Outlined.Timer, formatTime(state.elapsedMs), fg)
         }

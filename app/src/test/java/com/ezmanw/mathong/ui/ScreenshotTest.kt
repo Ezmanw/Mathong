@@ -3,6 +3,9 @@ package com.ezmanw.mathong.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
@@ -17,6 +20,7 @@ import com.ezmanw.mathong.ui.theme.MathongTheme
 import org.junit.Rule
 import org.junit.Test
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 class ScreenshotTest {
     @get:Rule
     val paparazzi = Paparazzi(deviceConfig = DeviceConfig.PIXEL_6, maxPercentDifference = 1.0)
@@ -32,6 +36,40 @@ class ScreenshotTest {
             MathongTheme(dynamicColor = false) {
                 Box(Modifier.fillMaxSize().background(boardBrush(settings.background))) {
                     BoardView(b, free.firstOrNull(), null, null, 0, settings, onTap = {}, modifier = Modifier.fillMaxSize())
+                }
+            }
+        }
+    }
+
+    @Test
+    fun allLayouts() {
+        paparazzi.snapshot {
+            MathongTheme(dynamicColor = false) {
+                androidx.compose.foundation.layout.FlowRow(
+                    Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.White),
+                ) {
+                    Layouts.all.forEach { l ->
+                        androidx.compose.foundation.layout.Column(Modifier.padding(4.dp)) {
+                            com.ezmanw.mathong.ui.common.LayoutThumbnail(l, Modifier.size(120.dp, 100.dp))
+                            androidx.compose.material3.Text(l.name)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun paceChart() {
+        val r = kotlin.random.Random(1)
+        val games = List(18) { i ->
+            val l = Layouts.all[r.nextInt(Layouts.all.size)]
+            com.ezmanw.mathong.data.RecentGame(l.id, (l.size * (2500L + r.nextInt(3000))), 1000 + i * 37, 2, l.size, 1_760_000_000_000L + i * 86_400_000L)
+        }
+        paparazzi.snapshot {
+            MathongTheme(dynamicColor = false) {
+                Box(Modifier.fillMaxSize().background(androidx.compose.material3.MaterialTheme.colorScheme.background).padding(16.dp)) {
+                    com.ezmanw.mathong.ui.stats.PaceChart(games)
                 }
             }
         }

@@ -73,13 +73,13 @@ fun LayoutThumbnail(layout: Layout, modifier: Modifier = Modifier) {
         for (i in order) {
             val s = layout.slots[i]
             val o = Offset(ox + (s.x - layout.minX) * tw / 2 - s.z * tw * d, oy + (s.y - layout.minY) * th / 2 - s.z * tw * d)
-            val shade = 0.45f + 0.55f * (s.z.toFloat() / (layout.maxZ.coerceAtLeast(1)))
-            drawRoundRect(cs.primary.copy(alpha = 0.5f), o + Offset(tw * d, tw * d), Size(tw * 0.96f, th * 0.96f), CornerRadius(tw * 0.15f))
-            drawRoundRect(
-                if (geo.above[i].isEmpty()) cs.primaryContainer else cs.secondaryContainer,
-                o, Size(tw * 0.96f, th * 0.96f), CornerRadius(tw * 0.15f),
-            )
-            drawRoundRect(cs.primary.copy(alpha = 0.25f * shade), o, Size(tw * 0.96f, th * 0.96f), CornerRadius(tw * 0.15f))
+            val t = if (layout.maxZ == 0) 0f else s.z.toFloat() / layout.maxZ
+            val face = androidx.compose.ui.graphics.lerp(cs.secondaryContainer, cs.primary, t * 0.75f)
+            drawRoundRect(cs.onSurface.copy(alpha = 0.25f), o + Offset(tw * d, tw * d), Size(tw * 0.96f, th * 0.96f), CornerRadius(tw * 0.15f))
+            drawRoundRect(face, o, Size(tw * 0.96f, th * 0.96f), CornerRadius(tw * 0.15f))
+            if (geo.above[i].isEmpty()) {
+                drawRoundRect(cs.surface.copy(alpha = 0.35f), o, Size(tw * 0.96f, th * 0.3f), CornerRadius(tw * 0.15f))
+            }
         }
     }
 }

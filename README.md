@@ -3,12 +3,13 @@
 Mahjong Solitaire for Android, built with Kotlin, Jetpack Compose and Material 3.
 
 ## Features
-- 14 layouts (Pocket, Meadow, Pinwheel, Pyramid, Cross, Bridge, Heart, Hourglass, Arena, Stairs, Fortress, Butterfly, Turtle, Ziggurat)
+- 22 layouts, from the 32-tile Pocket to the 144-tile Turtle and 140-tile Temple
 - Guaranteed-solvable deals and shuffles
-- Smart look-ahead hints, undo/redo, shuffle, auto-shuffle option
+- Smart look-ahead hints, undo/redo, shuffle, auto-shuffle, auto-finish, matching-tile assist
 - Daily Challenge (same deal for everyone each day) with streak calendar
 - Combo scoring, time bonus, star ratings, per-layout best times
-- Achievements and statistics
+- Achievements and statistics with a pace chart
+- Landscape layout with navigation rail
 - Material You dynamic color, light/dark mode, tile styles, board backgrounds, corner labels
 - Synthesized sound effects, haptics, pinch-to-zoom, auto-save/resume
 
