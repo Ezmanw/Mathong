@@ -1,5 +1,9 @@
-## Mathong v1.7 — Mahjong Solitaire
+## Mathong v1.8 — Mahjong Solitaire
 
+### Fix
+- **Tiles were drawn about a third too large** in v1.6 and v1.7 when *Fast tile rendering* was on (the default). The tile cache now draws tiles at exactly the right size; a new screenshot test checks it pixel for pixel against normal drawing.
+
+### From v1.7
 ### Material tiles (new default)
 - Flat, **two-tone Material 3 tiles** whose colors come from your theme — including Material You wallpaper colors
 - Suit colors (red, green, blue…) are harmonized toward your theme's primary color, so they always match

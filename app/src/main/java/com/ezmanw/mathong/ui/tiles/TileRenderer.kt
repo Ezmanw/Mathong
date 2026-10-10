@@ -425,7 +425,7 @@ private fun DrawScope.drawOverlays(faceOrigin: Offset, size: Size, corner: Corne
 class TileImageCache(
     private val graphics: androidx.compose.ui.graphics.GraphicsContext,
     private val glyphs: GlyphCache,
-    private val size: Size,
+    private val tileSize: Size,
     private val depth: Float,
     val style: TileStyle,
     private val density: androidx.compose.ui.unit.Density,
@@ -433,14 +433,15 @@ class TileImageCache(
     private val layers = HashMap<Int, androidx.compose.ui.graphics.layer.GraphicsLayer>()
     /** Extra room around the face for the side, shadow and stroke. */
     private val pad = kotlin.math.ceil(depth * 0.5f).coerceAtLeast(2f)
-    private val w = kotlin.math.ceil(size.width + depth * 1.7f + pad * 2).toInt().coerceAtLeast(1)
-    private val h = kotlin.math.ceil(size.height + depth * 1.9f + pad * 2).toInt().coerceAtLeast(1)
+    private val w = kotlin.math.ceil(tileSize.width + depth * 1.7f + pad * 2).toInt().coerceAtLeast(1)
+    private val h = kotlin.math.ceil(tileSize.height + depth * 1.9f + pad * 2).toInt().coerceAtLeast(1)
 
     fun layer(kind: TileKind): androidx.compose.ui.graphics.layer.GraphicsLayer = layers.getOrPut(kind.id) {
         graphics.createGraphicsLayer().apply {
             topLeft = androidx.compose.ui.unit.IntOffset(-pad.toInt(), -pad.toInt())
             record(density, androidx.compose.ui.unit.LayoutDirection.Ltr, androidx.compose.ui.unit.IntSize(w, h)) {
-                drawTileOpaque(kind, Offset(pad.toInt().toFloat(), pad.toInt().toFloat()), size, depth, style, glyphs, null, 0f)
+                // Note: inside record{} a bare `size` would be the layer's size, not the tile's.
+                drawTileOpaque(kind, Offset(pad.toInt().toFloat(), pad.toInt().toFloat()), tileSize, depth, style, glyphs, null, 0f)
             }
         }
     }

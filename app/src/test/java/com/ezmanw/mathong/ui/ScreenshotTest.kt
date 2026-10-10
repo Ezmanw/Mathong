@@ -25,7 +25,7 @@ class ScreenshotTest {
     @get:Rule
     val paparazzi = Paparazzi(deviceConfig = DeviceConfig.PIXEL_6, maxPercentDifference = 1.0)
 
-    private fun board(layoutId: String, settings: Settings, removeSome: Int = 0, dark: Boolean = false) {
+    private fun board(layoutId: String, settings: Settings, removeSome: Int = 0, dark: Boolean = false, cache: Boolean = false) {
         var b = Generator.deal(Layouts.byId(layoutId), 42)
         repeat(removeSome) {
             val m = b.availableMatches().firstOrNull() ?: return@repeat
@@ -35,7 +35,7 @@ class ScreenshotTest {
         paparazzi.snapshot {
             MathongTheme(themeMode = if (dark) com.ezmanw.mathong.data.ThemeMode.DARK else com.ezmanw.mathong.data.ThemeMode.LIGHT, dynamicColor = false) {
                 Box(Modifier.fillMaxSize().background(boardBrush(settings.background))) {
-                    BoardView(b, free.firstOrNull(), null, null, 0, settings, onTap = {}, modifier = Modifier.fillMaxSize(), cacheTiles = false)
+                    BoardView(b, free.firstOrNull(), null, null, 0, settings, onTap = {}, modifier = Modifier.fillMaxSize(), cacheTiles = cache)
                 }
             }
         }
@@ -94,6 +94,8 @@ class ScreenshotTest {
     @Test fun turtle() = board("turtle", Settings())
     @Test fun pyramidFelt() = board("pyramid", Settings(background = BoardBackground.FELT, tileTheme = TileTheme.IVORY, faceStyle = com.ezmanw.mathong.data.FaceStyle.TRADITIONAL), 10)
     @Test fun pocketSimple() = board("pocket", Settings(faceStyle = com.ezmanw.mathong.data.FaceStyle.SIMPLE, tileTheme = TileTheme.AMBER))
+    /** Same board through the recorded-layer cache; must match pocketIndices exactly. */
+    @Test fun pocketIndicesCached() = board("pocket", Settings(showIndices = true, tileTheme = TileTheme.SAPPHIRE), cache = true)
     @Test fun pocketTraditional() = board("pocket", Settings(faceStyle = com.ezmanw.mathong.data.FaceStyle.TRADITIONAL))
     @Test fun turtleDark() = board("turtle", Settings(themeMode = com.ezmanw.mathong.data.ThemeMode.DARK), dark = true)
 
