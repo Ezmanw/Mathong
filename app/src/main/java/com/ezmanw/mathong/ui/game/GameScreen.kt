@@ -119,6 +119,7 @@ fun GameScreen(
     var comboKey by remember { mutableStateOf(0) }
     var menuOpen by remember { mutableStateOf(false) }
     var confirmNew by remember { mutableStateOf(false) }
+    var inspect by remember { mutableStateOf<Int?>(null) }
 
     DisposableEffect(view) {
         view.keepScreenOn = true
@@ -261,12 +262,16 @@ fun GameScreen(
                                         shakeKey = state.shakeKey,
                                         settings = settings,
                                         dealId = state.dealId,
-                                        onTap = vm::tapTile,
+                                        onTap = { inspect = null; vm.tapTile(it) },
+                                        onLongPress = { inspect = it },
                                         modifier = Modifier.fillMaxSize(),
                                     )
                                 }
                             }
                             ComboPopup(comboText, comboKey, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
+                            state.board?.let { b ->
+                                TileInspector(b, inspect, settings, onDismiss = { inspect = null }, Modifier.align(Alignment.BottomStart).padding(12.dp))
+                            }
                             val canFinish = remember(state.board) { vm.canAutoFinish(state.board) }
                             androidx.compose.animation.AnimatedVisibility(
                                 visible = canFinish && state.status == GameStatus.PLAYING,
@@ -450,6 +455,50 @@ private fun PausedOverlay(onResume: () -> Unit) {
                 Icon(Icons.Filled.PlayArrow, null)
                 Spacer(Modifier.width(8.dp))
                 Text("Resume")
+            }
+        }
+    }
+}
+
+@Composable
+private fun TileInspector(
+    board: com.ezmanw.mathong.game.Board,
+    tile: Int?,
+    settings: com.ezmanw.mathong.data.Settings,
+    onDismiss: () -> Unit,
+    modifier: Modifier,
+) {
+    LaunchedEffect(tile) {
+        if (tile != null) { delay(3500); onDismiss() }
+    }
+    AnimatedVisibility(tile != null && board.present.getOrElse(tile) { false }, modifier, enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()) {
+        val i = tile ?: return@AnimatedVisibility
+        val kind = board.kind(i)
+        val free = board.isFree(i)
+        val left = (0 until board.layout.size).count { board.present[it] && board.kind(it).matches(kind) }
+        val freeMatches = board.freeTiles().count { it != i && board.kind(it).matches(kind) }
+        Surface(
+            onClick = onDismiss,
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shadowElevation = 6.dp,
+        ) {
+            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                com.ezmanw.mathong.ui.common.TilePreview(kind, settings.tileTheme, 52.dp, showIndex = settings.showIndices, simple = settings.simpleFaces)
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(kind.displayName, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (free) "Free" else "Blocked",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (free) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    )
+                    Text(
+                        "$left on the board · $freeMatches free match${if (freeMatches == 1) "" else "es"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }

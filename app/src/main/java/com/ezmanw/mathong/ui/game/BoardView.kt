@@ -16,6 +16,8 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.filled.ZoomOutMap
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -98,6 +100,7 @@ fun BoardView(
     dealId: Long = 0L,
     onTap: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    onLongPress: ((Int) -> Unit)? = null,
 ) {
     val measurer = rememberTextMeasurer(cacheSize = 64)
     val glyphs = remember(measurer) { GlyphCache(measurer) }
@@ -230,21 +233,22 @@ fun BoardView(
                     translationX = pan.x; translationY = pan.y
                 }
                 .pointerInput(board, metrics) {
+                    // Topmost tile under the finger wins.
+                    fun hit(pos: Offset): Int? {
+                        for (k in drawOrder.indices.reversed()) {
+                            val i = drawOrder[k]
+                            if (!board.present[i]) continue
+                            val o = metrics.faceOrigin(i)
+                            if (pos.x >= o.x && pos.x <= o.x + metrics.tileW + metrics.depth &&
+                                pos.y >= o.y && pos.y <= o.y + metrics.tileH + metrics.depth
+                            ) return i
+                        }
+                        return null
+                    }
+                    // No double-tap handler: it would delay every single tap.
                     detectTapGestures(
-                        onDoubleTap = {
-                            if (zoom > 1.01f) { zoom = 1f; pan = Offset.Zero } else zoom = 2f
-                        },
-                        onTap = { pos ->
-                            // Topmost tile under the finger wins.
-                            for (k in drawOrder.indices.reversed()) {
-                                val i = drawOrder[k]
-                                if (!board.present[i]) continue
-                                val o = metrics.faceOrigin(i)
-                                if (pos.x >= o.x && pos.x <= o.x + metrics.tileW + metrics.depth &&
-                                    pos.y >= o.y && pos.y <= o.y + metrics.tileH + metrics.depth
-                                ) { onTap(i); break }
-                            }
-                        },
+                        onLongPress = { pos -> hit(pos)?.let { onLongPress?.invoke(it) } },
+                        onTap = { pos -> hit(pos)?.let(onTap) },
                     )
                 },
         ) {
@@ -304,6 +308,12 @@ fun BoardView(
                     alpha = 1f - fade,
                 )
             }
+        }
+        if (zoom > 1.01f) {
+            androidx.compose.material3.SmallFloatingActionButton(
+                onClick = { zoom = 1f; pan = Offset.Zero },
+                modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd).padding(8.dp),
+            ) { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.ZoomOutMap, "Reset zoom") }
         }
     }
 }

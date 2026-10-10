@@ -1,14 +1,16 @@
-## Mathong v1.3 — Mahjong Solitaire
+## Mathong v1.4 — Mahjong Solitaire
 
 ### New
-- **Interactive tutorial** — a guided mini board that teaches free and blocked tiles step by step (Home → *Try the tutorial*, or from How to play)
-- **Simple tile faces** — optional Western-style faces (E/S/W/N, R/G/W dragons, numbered "CRAK" characters, named flowers and seasons) for easier reading
-- **Deal animation** — tiles drop onto the table layer by layer when a game starts, resumes or is shuffled
-- Screen stays awake while you play
-- TalkBack describes the board state (pairs left, free tiles, current selection)
-- The layout editor now centres existing custom layouts when you open them
+- **Daily reminder** — optional notification at a time you choose, only if you haven't played today's challenge; tapping it opens the daily straight away
+- **Tile inspector** — long-press any tile to see it enlarged with its name, whether it's free, and how many matches remain
+- **Reset zoom** button appears while zoomed in
+
+### Fixes
+- Taps on tiles respond instantly (removed the double-tap-to-zoom delay)
+- A game in progress is no longer replaced with a new deal if Android closes the app in the background
 
 ### Previously
+- v1.3: interactive tutorial, simple tile faces, deal animation, TalkBack support
 - v1.2: layout editor, Time Attack and Zen modes, result sharing
 - v1.1: 22 layouts, auto-finish, match animation, landscape mode, pace chart
 - v1: solvable deals, smart hints, daily challenge, achievements, Material You theming

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -35,6 +36,9 @@ class Repository(private val context: Context) {
         val autoShuffle = booleanPreferencesKey("auto_shuffle")
         val showMatches = booleanPreferencesKey("show_matches")
         val simpleFaces = booleanPreferencesKey("simple_faces")
+        val dailyReminder = booleanPreferencesKey("daily_reminder")
+        val reminderHour = intPreferencesKey("reminder_hour")
+        val reminderMinute = intPreferencesKey("reminder_minute")
         val stats = stringPreferencesKey("stats")
         val savedGame = stringPreferencesKey("saved_game")
         val lastLayout = stringPreferencesKey("last_layout")
@@ -61,6 +65,9 @@ class Repository(private val context: Context) {
             autoShuffle = p[Keys.autoShuffle] ?: d.autoShuffle,
             showMatches = p[Keys.showMatches] ?: d.showMatches,
             simpleFaces = p[Keys.simpleFaces] ?: d.simpleFaces,
+            dailyReminder = p[Keys.dailyReminder] ?: d.dailyReminder,
+            reminderHour = p[Keys.reminderHour] ?: d.reminderHour,
+            reminderMinute = p[Keys.reminderMinute] ?: d.reminderMinute,
         )
     }
 
@@ -80,6 +87,9 @@ class Repository(private val context: Context) {
             p[Keys.autoShuffle] = s.autoShuffle
             p[Keys.showMatches] = s.showMatches
             p[Keys.simpleFaces] = s.simpleFaces
+            p[Keys.dailyReminder] = s.dailyReminder
+            p[Keys.reminderHour] = s.reminderHour
+            p[Keys.reminderMinute] = s.reminderMinute
         }
     }
 

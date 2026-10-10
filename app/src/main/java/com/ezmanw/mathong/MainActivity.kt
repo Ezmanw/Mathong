@@ -1,6 +1,10 @@
 package com.ezmanw.mathong
 
+import android.content.Intent
 import android.os.Bundle
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import com.ezmanw.mathong.notify.Reminders
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -32,14 +36,22 @@ import com.ezmanw.mathong.ui.stats.StatsScreen
 import com.ezmanw.mathong.ui.theme.MathongTheme
 
 class MainActivity : ComponentActivity() {
+    private val pendingOpen = mutableStateOf<String?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        pendingOpen.value = intent.getStringExtra(Reminders.EXTRA_OPEN)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) pendingOpen.value = intent?.getStringExtra(Reminders.EXTRA_OPEN)
         enableEdgeToEdge()
         val repo = (application as MathongApp).repository
         setContent {
             val settings by repo.settings.collectAsState(initial = Settings())
             MathongTheme(themeMode = settings.themeMode, dynamicColor = settings.dynamicColor) {
-                MathongNavHost(rememberNavController())
+                MathongNavHost(rememberNavController(), pendingOpen.value) { pendingOpen.value = null }
             }
         }
     }
@@ -63,9 +75,15 @@ private object Routes {
 }
 
 @Composable
-private fun MathongNavHost(nav: NavHostController) {
+private fun MathongNavHost(nav: NavHostController, open: String?, onOpened: () -> Unit) {
     fun openGame(route: String) = nav.navigate(route) {
         popUpTo(Routes.HOME)
+    }
+    LaunchedEffect(open) {
+        if (open == Reminders.OPEN_DAILY) {
+            openGame(Routes.game(daily = true))
+            onOpened()
+        }
     }
     NavHost(
         navController = nav,

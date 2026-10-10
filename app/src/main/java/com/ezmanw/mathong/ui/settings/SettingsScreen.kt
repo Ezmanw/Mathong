@@ -46,6 +46,10 @@ import com.ezmanw.mathong.data.BoardBackground
 import com.ezmanw.mathong.data.Settings
 import com.ezmanw.mathong.data.ThemeMode
 import com.ezmanw.mathong.data.TileTheme
+import com.ezmanw.mathong.notify.Reminders
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.ezmanw.mathong.game.TileKind
 import com.ezmanw.mathong.ui.common.TilePreview
 import com.ezmanw.mathong.ui.common.repository
@@ -61,6 +65,15 @@ fun SettingsScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     fun update(t: (Settings) -> Settings) { scope.launch { repo.updateSettings(t) } }
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var pickTime by remember { mutableStateOf(false) }
+    fun enableReminder(h: Int = s.reminderHour, m: Int = s.reminderMinute) {
+        update { it.copy(dailyReminder = true, reminderHour = h, reminderMinute = m) }
+        Reminders.schedule(context, h, m)
+    }
+    val permission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) enableReminder() }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
@@ -163,6 +176,24 @@ fun SettingsScreen(onBack: () -> Unit) {
                 SwitchRow("Auto shuffle", "Shuffle automatically when no moves remain", s.autoShuffle) { v -> update { it.copy(autoShuffle = v) } }
                 SwitchRow("Show timer", null, s.showTimer) { v -> update { it.copy(showTimer = v) } }
 
+                Section("Daily challenge")
+                SwitchRow("Daily reminder", "Get a nudge if you haven't played today's challenge", s.dailyReminder) { on ->
+                    if (on) {
+                        if (Reminders.canNotify(context)) enableReminder()
+                        else if (Build.VERSION.SDK_INT >= 33) permission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        update { it.copy(dailyReminder = false) }
+                        Reminders.cancel(context)
+                    }
+                }
+                if (s.dailyReminder) {
+                    ListItem(
+                        modifier = Modifier.clickable { pickTime = true },
+                        headlineContent = { Text("Reminder time") },
+                        supportingContent = { Text("%02d:%02d".format(s.reminderHour, s.reminderMinute)) },
+                    )
+                }
+
                 Section("Feedback")
                 SwitchRow("Sound effects", null, s.sound) { v -> update { it.copy(sound = v) } }
                 SwitchRow("Haptic feedback", null, s.haptics) { v -> update { it.copy(haptics = v) } }
@@ -176,6 +207,25 @@ fun SettingsScreen(onBack: () -> Unit) {
             }
         }
     }
+    if (pickTime) {
+        TimeDialog(s.reminderHour, s.reminderMinute, onDismiss = { pickTime = false }) { h, m ->
+            pickTime = false
+            enableReminder(h, m)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TimeDialog(hour: Int, minute: Int, onDismiss: () -> Unit, onPick: (Int, Int) -> Unit) {
+    val state = androidx.compose.material3.rememberTimePickerState(hour, minute)
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Reminder time") },
+        text = { androidx.compose.material3.TimePicker(state) },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { onPick(state.hour, state.minute) }) { Text("OK") } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable

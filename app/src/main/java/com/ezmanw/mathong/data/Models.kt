@@ -32,6 +32,9 @@ data class Settings(
     val autoShuffle: Boolean = false,
     val showMatches: Boolean = false,
     val simpleFaces: Boolean = false,
+    val dailyReminder: Boolean = false,
+    val reminderHour: Int = 19,
+    val reminderMinute: Int = 0,
 )
 
 @Serializable

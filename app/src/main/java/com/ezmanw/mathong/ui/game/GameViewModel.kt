@@ -106,8 +106,12 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
             if (!LayoutRegistry.loaded) repo.syncCustomLayouts()
             val saved = repo.savedGame.first()
             val today = LocalDate.now().toString()
+            // After process death the nav args come back unchanged; continue the saved game
+            // instead of dealing a new one over it.
+            val recreated = savedState.get<Boolean>("started") == true
+            savedState["started"] = true
             when {
-                resume && saved != null -> restore(saved)
+                (resume || recreated) && saved != null -> restore(saved)
                 daily && saved?.daily == today -> restore(saved)
                 daily -> startDaily()
                 else -> newGame(LayoutRegistry.byId(layoutId ?: repo.lastLayout.first() ?: "turtle"), if (seedArg >= 0) seedArg else null)
