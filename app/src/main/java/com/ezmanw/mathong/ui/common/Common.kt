@@ -36,11 +36,17 @@ fun repository(): Repository = (LocalContext.current.applicationContext as Matho
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BackTopBar(title: String, onBack: () -> Unit, scrollBehavior: TopAppBarScrollBehavior? = null) {
+fun BackTopBar(
+    title: String,
+    onBack: () -> Unit,
+    scrollBehavior: TopAppBarScrollBehavior? = null,
+    actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
+) {
     LargeTopAppBar(
         title = { Text(title) },
         navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
         scrollBehavior = scrollBehavior,
+        actions = actions,
     )
 }
 

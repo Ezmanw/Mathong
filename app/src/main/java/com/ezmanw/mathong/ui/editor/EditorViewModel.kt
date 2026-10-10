@@ -146,6 +146,8 @@ class EditorViewModel(app: Application, savedState: SavedStateHandle) : AndroidV
         }
     }
 
+    fun shareCode(): String = com.ezmanw.mathong.data.ShareCodes.encode(_state.value.name, normalize(_state.value.slots))
+
     fun delete(onDeleted: () -> Unit) {
         val id = _state.value.id ?: run { onDeleted(); return }
         viewModelScope.launch {

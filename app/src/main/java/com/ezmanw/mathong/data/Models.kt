@@ -100,6 +100,14 @@ data class SavedGame(
 )
 
 @Serializable
+data class Backup(
+    val version: Int = 1,
+    val created: Long,
+    val stats: Stats,
+    val customLayouts: List<CustomLayoutData>,
+)
+
+@Serializable
 data class CustomLayoutData(
     val id: String,
     val name: String,

@@ -75,6 +75,7 @@ fun EditorScreen(
     var menu by remember { mutableStateOf(false) }
     var templates by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(s.message) {
         s.message?.let { snackbar.showSnackbar(it); vm.consumeMessage() }
@@ -92,6 +93,19 @@ fun EditorScreen(
                         IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "More") }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(text = { Text("Start from a layout…") }, onClick = { menu = false; templates = true })
+                            DropdownMenuItem(
+                                text = { Text("Share layout code") },
+                                enabled = s.quickProblem == null,
+                                onClick = {
+                                    menu = false
+                                    val code = vm.shareCode()
+                                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(android.content.Intent.EXTRA_TEXT, "Try my Mathong layout \"${s.name}\":\n$code")
+                                    }
+                                    context.startActivity(android.content.Intent.createChooser(send, "Share layout"))
+                                },
+                            )
                             DropdownMenuItem(text = { Text("Clear this layer") }, onClick = { menu = false; vm.clearLayer() })
                             DropdownMenuItem(text = { Text("Clear everything") }, onClick = { menu = false; vm.clearAll() })
                             if (s.id != null) {

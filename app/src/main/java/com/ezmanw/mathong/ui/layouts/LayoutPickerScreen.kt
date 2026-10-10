@@ -39,6 +39,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import com.ezmanw.mathong.data.GameMode
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.ezmanw.mathong.data.Stats
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -63,10 +74,19 @@ fun LayoutPickerScreen(onBack: () -> Unit, onPick: (String, GameMode) -> Unit, o
     var filter by rememberSaveable { mutableStateOf<Difficulty?>(null) }
     var mode by rememberSaveable { mutableStateOf(GameMode.CLASSIC) }
     val custom by LayoutRegistry.custom.collectAsState()
+    var importOpen by remember { mutableStateOf(false) }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val repo = repository()
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
-        topBar = { BackTopBar("Choose a layout", onBack, scroll) },
+        topBar = {
+            BackTopBar("Choose a layout", onBack, scroll) {
+                IconButton(onClick = { importOpen = true }) { Icon(Icons.Filled.Download, "Import layout code") }
+            }
+        },
+        snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onCreate,
@@ -131,6 +151,35 @@ fun LayoutPickerScreen(onBack: () -> Unit, onPick: (String, GameMode) -> Unit, o
             item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(72.dp)) }
         }
     }
+    if (importOpen) {
+        ImportDialog(
+            onDismiss = { importOpen = false },
+            onImport = { code ->
+                importOpen = false
+                scope.launch {
+                    val decoded = com.ezmanw.mathong.data.ShareCodes.decode(code)
+                    val msg = if (decoded == null) {
+                        "That isn't a valid layout code"
+                    } else {
+                        val (name, slots) = decoded
+                        val error = withContext(Dispatchers.Default) { LayoutRegistry.validate(slots) }
+                        if (error != null) error else {
+                            repo.saveCustomLayout(
+                                com.ezmanw.mathong.data.CustomLayoutData(
+                                    id = LayoutRegistry.CUSTOM_PREFIX + System.currentTimeMillis().toString(36),
+                                    name = name,
+                                    created = System.currentTimeMillis(),
+                                    slots = slots.flatMap { listOf(it.x, it.y, it.z) },
+                                )
+                            )
+                            "Imported \"$name\""
+                        }
+                    }
+                    snackbar.showSnackbar(msg)
+                }
+            },
+        )
+    }
 }
 
 fun Difficulty.label() = name.lowercase().replaceFirstChar { it.uppercase() }
@@ -187,4 +236,25 @@ private fun LayoutCard(layout: Layout, stats: Stats, onClick: () -> Unit, onEdit
             }
         }
     }
+}
+
+@Composable
+private fun ImportDialog(onDismiss: () -> Unit, onImport: (String) -> Unit) {
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    var text by remember {
+        mutableStateOf(clipboard.getText()?.text?.let { t -> Regex("MATHONG1:[A-Za-z0-9_-]+").find(t)?.value } ?: "")
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Import a layout") },
+        text = {
+            Column {
+                Text("Paste a layout code shared from Mathong.", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(value = text, onValueChange = { text = it }, label = { Text("Code") }, maxLines = 4)
+            }
+        },
+        confirmButton = { TextButton(onClick = { onImport(text) }, enabled = text.isNotBlank()) { Text("Import") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }

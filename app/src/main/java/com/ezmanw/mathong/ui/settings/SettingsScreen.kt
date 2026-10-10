@@ -71,6 +71,26 @@ fun SettingsScreen(onBack: () -> Unit) {
         update { it.copy(dailyReminder = true, reminderHour = h, reminderMinute = m) }
         Reminders.schedule(context, h, m)
     }
+    val backupMsg = remember { mutableStateOf<String?>(null) }
+    val exporter = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        if (uri != null) scope.launch {
+            val ok = runCatching {
+                val text = repo.exportBackup()
+                context.contentResolver.openOutputStream(uri)!!.use { it.write(text.toByteArray()) }
+            }.isSuccess
+            backupMsg.value = if (ok) "Backup saved" else "Couldn't write the backup"
+        }
+    }
+    val importer = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) scope.launch {
+            val text = runCatching { context.contentResolver.openInputStream(uri)!!.use { it.readBytes().decodeToString() } }.getOrNull()
+            backupMsg.value = if (text != null && repo.importBackup(text)) "Backup restored" else "That file isn't a Mathong backup"
+        }
+    }
     val permission = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
     ) { granted -> if (granted) enableReminder() }
@@ -197,6 +217,21 @@ fun SettingsScreen(onBack: () -> Unit) {
                 Section("Feedback")
                 SwitchRow("Sound effects", null, s.sound) { v -> update { it.copy(sound = v) } }
                 SwitchRow("Haptic feedback", null, s.haptics) { v -> update { it.copy(haptics = v) } }
+
+                Section("Data")
+                ListItem(
+                    modifier = Modifier.clickable { exporter.launch("mathong-backup-${java.time.LocalDate.now()}.json") },
+                    headlineContent = { Text("Back up") },
+                    supportingContent = { Text("Save statistics, achievements and custom layouts to a file") },
+                )
+                ListItem(
+                    modifier = Modifier.clickable { importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
+                    headlineContent = { Text("Restore") },
+                    supportingContent = { Text("Replace your data with a backup file") },
+                )
+                backupMsg.value?.let {
+                    Text(it, Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+                }
 
                 Section("About")
                 ListItem(

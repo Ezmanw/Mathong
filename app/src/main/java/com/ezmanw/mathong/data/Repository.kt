@@ -151,6 +151,22 @@ class Repository(private val context: Context) {
         val layouts = customLayouts.first().mapNotNull { it.toLayout() }
         LayoutRegistry.setCustom(layouts)
     }
+
+    suspend fun exportBackup(): String = json.encodeToString(
+        Backup.serializer(),
+        Backup(created = System.currentTimeMillis(), stats = stats.first(), customLayouts = customLayouts.first()),
+    )
+
+    /** Restores a backup produced by [exportBackup]. Returns false if the text is not a valid backup. */
+    suspend fun importBackup(text: String): Boolean {
+        val backup = runCatching { json.decodeFromString(Backup.serializer(), text) }.getOrNull() ?: return false
+        store.edit { p ->
+            p[Keys.stats] = json.encodeToString(Stats.serializer(), backup.stats)
+            p[Keys.customLayouts] = json.encodeToString(ListSerializer(CustomLayoutData.serializer()), backup.customLayouts)
+        }
+        syncCustomLayouts()
+        return true
+    }
 }
 
 fun CustomLayoutData.toLayout(): Layout? {
