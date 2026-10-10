@@ -1,0 +1,105 @@
+package com.ezmanw.mathong.data
+
+import android.content.Context
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.Json
+
+private val Context.dataStore by preferencesDataStore(name = "mathong")
+
+class Repository(private val context: Context) {
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = false }
+    private val store get() = context.dataStore
+
+    private object Keys {
+        val themeMode = stringPreferencesKey("theme_mode")
+        val dynamicColor = booleanPreferencesKey("dynamic_color")
+        val tileTheme = stringPreferencesKey("tile_theme")
+        val background = stringPreferencesKey("background")
+        val showIndices = booleanPreferencesKey("show_indices")
+        val highlightFree = booleanPreferencesKey("highlight_free")
+        val sound = booleanPreferencesKey("sound")
+        val haptics = booleanPreferencesKey("haptics")
+        val showTimer = booleanPreferencesKey("show_timer")
+        val smartHints = booleanPreferencesKey("smart_hints")
+        val autoShuffle = booleanPreferencesKey("auto_shuffle")
+        val stats = stringPreferencesKey("stats")
+        val savedGame = stringPreferencesKey("saved_game")
+        val lastLayout = stringPreferencesKey("last_layout")
+        val seenTutorial = booleanPreferencesKey("seen_tutorial")
+    }
+
+    private inline fun <reified E : Enum<E>> Preferences.enum(key: Preferences.Key<String>, default: E): E =
+        this[key]?.let { v -> enumValues<E>().firstOrNull { it.name == v } } ?: default
+
+    val settings: Flow<Settings> = store.data.map { p ->
+        val d = Settings()
+        Settings(
+            themeMode = p.enum(Keys.themeMode, d.themeMode),
+            dynamicColor = p[Keys.dynamicColor] ?: d.dynamicColor,
+            tileTheme = p.enum(Keys.tileTheme, d.tileTheme),
+            background = p.enum(Keys.background, d.background),
+            showIndices = p[Keys.showIndices] ?: d.showIndices,
+            highlightFree = p[Keys.highlightFree] ?: d.highlightFree,
+            sound = p[Keys.sound] ?: d.sound,
+            haptics = p[Keys.haptics] ?: d.haptics,
+            showTimer = p[Keys.showTimer] ?: d.showTimer,
+            smartHints = p[Keys.smartHints] ?: d.smartHints,
+            autoShuffle = p[Keys.autoShuffle] ?: d.autoShuffle,
+        )
+    }
+
+    suspend fun updateSettings(transform: (Settings) -> Settings) {
+        val s = transform(settings.first())
+        store.edit { p ->
+            p[Keys.themeMode] = s.themeMode.name
+            p[Keys.dynamicColor] = s.dynamicColor
+            p[Keys.tileTheme] = s.tileTheme.name
+            p[Keys.background] = s.background.name
+            p[Keys.showIndices] = s.showIndices
+            p[Keys.highlightFree] = s.highlightFree
+            p[Keys.sound] = s.sound
+            p[Keys.haptics] = s.haptics
+            p[Keys.showTimer] = s.showTimer
+            p[Keys.smartHints] = s.smartHints
+            p[Keys.autoShuffle] = s.autoShuffle
+        }
+    }
+
+    val stats: Flow<Stats> = store.data.map { p ->
+        p[Keys.stats]?.let { runCatching { json.decodeFromString<Stats>(it) }.getOrNull() } ?: Stats()
+    }
+
+    suspend fun updateStats(transform: (Stats) -> Stats): Stats {
+        var result = Stats()
+        store.edit { p ->
+            val cur = p[Keys.stats]?.let { runCatching { json.decodeFromString<Stats>(it) }.getOrNull() } ?: Stats()
+            result = transform(cur)
+            p[Keys.stats] = json.encodeToString(Stats.serializer(), result)
+        }
+        return result
+    }
+
+    suspend fun resetStats() = store.edit { it.remove(Keys.stats) }
+
+    val savedGame: Flow<SavedGame?> = store.data.map { p ->
+        p[Keys.savedGame]?.let { runCatching { json.decodeFromString<SavedGame>(it) }.getOrNull() }
+    }
+
+    suspend fun saveGame(game: SavedGame?) = store.edit { p ->
+        if (game == null) p.remove(Keys.savedGame)
+        else p[Keys.savedGame] = json.encodeToString(SavedGame.serializer(), game)
+    }
+
+    val lastLayout: Flow<String?> = store.data.map { it[Keys.lastLayout] }
+    suspend fun setLastLayout(id: String) = store.edit { it[Keys.lastLayout] = id }
+
+    val seenTutorial: Flow<Boolean> = store.data.map { it[Keys.seenTutorial] ?: false }
+    suspend fun setSeenTutorial() = store.edit { it[Keys.seenTutorial] = true }
+}
