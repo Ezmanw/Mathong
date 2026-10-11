@@ -33,6 +33,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -55,8 +63,44 @@ private const val DEPTH = 0.13f       // depth as a fraction of tile width
 
 class Flight(val progress: Animatable<Float, *>, val from: Offset, val to: Offset)
 
+/** Zoom and pan of the board, hoisted so keyboard shortcuts and buttons can drive it. */
+class BoardZoom {
+    var zoom by mutableFloatStateOf(1f)
+        private set
+    var pan by mutableStateOf(Offset.Zero)
+        private set
+    var viewport = Size.Zero
+
+    val isZoomed get() = zoom > 1.01f
+
+    /**
+     * Zooms by [factor], keeping the point [focus] (in viewport pixels, default the
+     * centre) fixed on screen, then pans by [drag].
+     */
+    fun apply(factor: Float, focus: Offset? = null, drag: Offset = Offset.Zero) {
+        val center = Offset(viewport.width / 2, viewport.height / 2)
+        val f = focus ?: center
+        val newZoom = (zoom * factor).coerceIn(1f, MAX_ZOOM)
+        val k = newZoom / zoom
+        val rel = f - center
+        var p = rel - (rel - pan) * k + drag
+        val maxX = viewport.width * (newZoom - 1) / 2
+        val maxY = viewport.height * (newZoom - 1) / 2
+        p = Offset(p.x.coerceIn(-maxX, maxX), p.y.coerceIn(-maxY, maxY))
+        zoom = newZoom
+        pan = p
+    }
+
+    fun reset() { zoom = 1f; pan = Offset.Zero }
+
+    companion object { const val MAX_ZOOM = 3.5f }
+}
+
+@Composable
+fun rememberBoardZoom() = remember { BoardZoom() }
+
 /** Pixel geometry for drawing a layout into a given box. */
-class BoardMetrics(board: Board, width: Float, height: Float, zoomPad: Float) {
+class BoardMetrics(board: Board, width: Float, height: Float, zoomPad: Float, maxTileW: Float = Float.MAX_VALUE) {
     private val layout = board.layout
     val tileW: Float
     val tileH: Float
@@ -70,7 +114,8 @@ class BoardMetrics(board: Board, width: Float, height: Float, zoomPad: Float) {
         val layers = layout.maxZ + 1
         val wFit = (width - zoomPad * 2) / (unitsW + DEPTH * (layers + 1))
         val hFit = (height - zoomPad * 2) / (unitsH * ASPECT + DEPTH * (layers + 1))
-        tileW = min(wFit, hFit)
+        // Cap the size so tiles don't balloon on big tablets and desktop monitors.
+        tileW = min(min(wFit, hFit), maxTileW)
         tileH = tileW * ASPECT
         depth = tileW * DEPTH
         val totalW = unitsW * tileW + depth * (layers + 1)
@@ -103,6 +148,9 @@ fun BoardView(
     onTap: (Int) -> Unit,
     modifier: Modifier = Modifier,
     onLongPress: ((Int) -> Unit)? = null,
+    zoomState: BoardZoom = rememberBoardZoom(),
+    /** Tile focused by keyboard navigation. */
+    cursor: Int? = null,
     /** Replay recorded tile layers. Screenshot tests turn this off (layoutlib scales offscreen layers). */
     cacheTiles: Boolean = true,
 ) {
@@ -194,16 +242,19 @@ fun BoardView(
     // Tile currently under the finger, drawn pressed for instant feedback.
     var pressed by remember { mutableStateOf<Int?>(null) }
 
-    var zoom by remember { mutableFloatStateOf(1f) }
-    var pan by remember { mutableStateOf(Offset.Zero) }
-    LaunchedEffect(board.layout) { zoom = 1f; pan = Offset.Zero }
+    LaunchedEffect(board.layout) { zoomState.reset() }
+    // Tile under the mouse pointer (desktop / ChromeOS / stylus hover).
+    var hovered by remember { mutableStateOf<Int?>(null) }
 
     val density = LocalDensity.current
 
     BoxWithConstraints(modifier) {
         val w = constraints.maxWidth.toFloat()
         val h = constraints.maxHeight.toFloat()
-        val metrics = remember(board.layout, w, h) { BoardMetrics(board, w, h, with(density) { 8.dp.toPx() }) }
+        zoomState.viewport = Size(w, h)
+        val metrics = remember(board.layout, w, h) {
+            BoardMetrics(board, w, h, with(density) { 8.dp.toPx() }, maxTileW = with(density) { 104.dp.toPx() })
+        }
         metricsHolder[0] = metrics
         val graphicsContext = androidx.compose.ui.platform.LocalGraphicsContext.current
         val tileImages = remember(metrics, style, glyphs) {
@@ -232,23 +283,32 @@ fun BoardView(
                             val multi = event.changes.count { it.pressed } >= 2
                             val p = event.calculatePan()
                             moved += p.getDistance()
-                            if (multi || (zoom > 1.01f && moved > viewConfiguration.touchSlop)) {
-                                val newZoom = (zoom * event.calculateZoom()).coerceIn(1f, 3.5f)
-                                val maxX = w * (newZoom - 1) / 2
-                                val maxY = h * (newZoom - 1) / 2
-                                pan = Offset(
-                                    (pan.x + p.x).coerceIn(-maxX, maxX),
-                                    (pan.y + p.y).coerceIn(-maxY, maxY),
-                                )
-                                zoom = newZoom
+                            if (multi || (zoomState.isZoomed && moved > viewConfiguration.touchSlop)) {
+                                zoomState.apply(event.calculateZoom(), event.calculateCentroid(useCurrent = true).takeIf { it.isSpecified }, p)
                                 event.changes.forEach { if (it.positionChanged()) it.consume() }
                             }
                         } while (event.changes.any { it.pressed })
                     }
                 }
+                .pointerInput(Unit) {
+                    // Mouse wheel / trackpad scroll zooms toward the pointer.
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            if (event.type == PointerEventType.Scroll) {
+                                val change = event.changes.first()
+                                val dy = change.scrollDelta.y
+                                if (dy != 0f) {
+                                    zoomState.apply(if (dy < 0) 1.15f else 1 / 1.15f, change.position)
+                                    change.consume()
+                                }
+                            }
+                        }
+                    }
+                }
                 .graphicsLayer {
-                    scaleX = zoom; scaleY = zoom
-                    translationX = pan.x; translationY = pan.y
+                    scaleX = zoomState.zoom; scaleY = zoomState.zoom
+                    translationX = zoomState.pan.x; translationY = zoomState.pan.y
                 }
                 .pointerInput(board, metrics) {
                     // Topmost tile under the finger wins; a near miss picks the closest tile.
@@ -274,7 +334,27 @@ fun BoardView(
                         onLongPress = { pos -> find(pos)?.let { onLongPress?.invoke(it) } },
                         onTap = { pos -> find(pos)?.let(onTap) },
                     )
-                },
+                }
+                .pointerInput(board, metrics) {
+                    // Hover highlight and right-click inspect for mouse and stylus.
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val change = event.changes.firstOrNull() ?: continue
+                            if (change.type == PointerType.Touch) continue
+                            when (event.type) {
+                                PointerEventType.Move, PointerEventType.Enter -> hovered = hitTest(board, metrics, drawOrder, change.position)
+                                PointerEventType.Exit -> hovered = null
+                                PointerEventType.Press -> if (event.buttons.isSecondaryPressed) {
+                                    hitTest(board, metrics, drawOrder, change.position)?.let { onLongPress?.invoke(it) }
+                                    change.consume()
+                                }
+                                else -> Unit
+                            }
+                        }
+                    }
+                }
+                .pointerHoverIcon(if (hovered?.let { freeSet.contains(it) } == true) PointerIcon.Hand else PointerIcon.Default),
         ) {
             val size = metrics.faceSize
             for (i in drawOrder) {
@@ -299,12 +379,25 @@ fun BoardView(
                     else -> null
                 }
                 val dim = if (settings.highlightFree && highlight == null && i !in freeSet) 0.22f else 0f
+                if (hovered == i && highlight == null && i in freeSet) origin -= Offset(0f, metrics.depth * 0.25f)
                 val d = if (pressed == i) dim + 0.08f else dim
                 if (cacheTiles && settings.fastRendering && dealAlpha >= 0.99f) {
                     drawCachedTile(tileImages, board.kind(i), origin, size, highlight, d)
                 } else {
                     drawTile(board.kind(i), origin, size, metrics.depth, style, glyphs, highlight, d, dealAlpha)
                 }
+            }
+            // Keyboard focus ring (Material focus indicator: thick outline outside the tile).
+            cursor?.takeIf { board.present.getOrElse(it) { false } }?.let { c ->
+                val o = metrics.faceOrigin(c)
+                val inset = metrics.tileW * 0.06f
+                drawRoundRect(
+                    colors.secondary,
+                    o - Offset(inset, inset),
+                    Size(size.width + inset * 2, size.height + inset * 2),
+                    androidx.compose.ui.geometry.CornerRadius(size.width * 0.26f),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(metrics.tileW * 0.07f),
+                )
             }
             // Removed tiles fly above the board.
             for ((i, f) in flying) {
@@ -316,12 +409,25 @@ fun BoardView(
                 drawTile(board.kind(i), origin, size, metrics.depth, style, glyphs, colors.primary.copy(alpha = 1f - fade), 0f, 1f - fade)
             }
         }
-        if (zoom > 1.01f) {
+        if (zoomState.isZoomed) {
             androidx.compose.material3.SmallFloatingActionButton(
-                onClick = { zoom = 1f; pan = Offset.Zero },
+                onClick = { zoomState.reset() },
                 modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd).padding(8.dp),
             ) { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.ZoomOutMap, "Reset zoom") }
         }
     }
 }
 
+
+/** Topmost present tile under [pos], or null. */
+internal fun hitTest(board: Board, metrics: BoardMetrics, drawOrder: List<Int>, pos: Offset, slop: Float = 0f): Int? {
+    for (k in drawOrder.indices.reversed()) {
+        val i = drawOrder[k]
+        if (!board.present[i]) continue
+        val o = metrics.faceOrigin(i)
+        if (pos.x >= o.x - slop && pos.x <= o.x + metrics.tileW + metrics.depth + slop &&
+            pos.y >= o.y - slop && pos.y <= o.y + metrics.tileH + metrics.depth + slop
+        ) return i
+    }
+    return null
+}

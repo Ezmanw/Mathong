@@ -52,6 +52,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.ezmanw.mathong.data.Settings
 import com.ezmanw.mathong.data.Stats
+import com.ezmanw.mathong.data.SavedGame
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
 import com.ezmanw.mathong.game.LayoutRegistry
 import com.ezmanw.mathong.game.Layouts
 import com.ezmanw.mathong.game.TileKind
@@ -62,6 +66,19 @@ import com.ezmanw.mathong.ui.game.formatTime
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+
+class HomeActions(
+    val onContinue: () -> Unit = {},
+    val onNewGame: () -> Unit = {},
+    val onQuickPlay: () -> Unit = {},
+    val onDaily: () -> Unit = {},
+    val onStats: () -> Unit = {},
+    val onAchievements: () -> Unit = {},
+    val onSettings: () -> Unit = {},
+    val onHelp: () -> Unit = {},
+    val onTutorial: () -> Unit = {},
+    val onDismissTutorial: () -> Unit = {},
+)
 
 @Composable
 fun HomeScreen(
@@ -81,80 +98,44 @@ fun HomeScreen(
     val settings by repo.settings.collectAsState(initial = Settings())
     val seenTutorial by repo.seenTutorial.collectAsState(initial = true)
     val scope = rememberCoroutineScope()
+    HomeContent(
+        saved, stats, settings, seenTutorial,
+        HomeActions(
+            onContinue, onNewGame, onQuickPlay, onDaily, onStats, onAchievements, onSettings, onHelp, onTutorial,
+            onDismissTutorial = { scope.launch { repo.setSeenTutorial() } },
+        ),
+    )
+}
 
+@Composable
+fun HomeContent(
+    saved: SavedGame?,
+    stats: Stats,
+    settings: Settings,
+    seenTutorial: Boolean,
+    actions: HomeActions,
+) {
     Scaffold { padding ->
-        Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
-            Column(
-                Modifier
-                    .widthIn(max = 640.dp)
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Header(settings)
-
-                if (!seenTutorial) {
-                    OutlinedCard(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text("New to Mahjong Solitaire?", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Match pairs of identical free tiles to clear the board. A tile is free when nothing sits on top of it and its left or right side is open.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                TextButton(onClick = { scope.launch { repo.setSeenTutorial() } }) { Text("Got it") }
-                                TextButton(onClick = onTutorial) { Text("Try the tutorial") }
-                            }
-                        }
-                    }
-                }
-
-                saved?.let { g ->
-                    val layout = LayoutRegistry.byId(g.layoutId)
-                    val left = g.present.count { it }
-                    ElevatedCard(
-                        onClick = onContinue,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                    ) {
-                        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text("Continue", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                Text(
-                                    (if (g.daily != null) "Daily · " else if (g.mode != com.ezmanw.mathong.data.GameMode.CLASSIC) "${g.mode.label} · " else "") + "${layout.name} · ${left / 2} pairs left · ${formatTime(g.elapsedMs)}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                androidx.compose.material3.LinearProgressIndicator(
-                                    progress = { 1f - left.toFloat() / layout.size },
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
-                            Spacer(Modifier.width(16.dp))
-                            Icon(Icons.Filled.PlayArrow, null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                        }
-                    }
-                }
-
+        BoxWithConstraints(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
+            val wide = maxWidth >= 840.dp
+            val primary: @Composable () -> Unit = {
+                if (!seenTutorial) TutorialCard(actions)
+                saved?.let { ContinueCard(it, actions.onContinue) }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    BigAction("New game", "Pick from ${LayoutRegistry.all().size} layouts", Icons.Filled.GridView, Modifier.weight(1f), onNewGame)
-                    BigAction("Quick play", "Random layout", Icons.Filled.Shuffle, Modifier.weight(1f), onQuickPlay)
+                    BigAction("New game", "Pick from ${LayoutRegistry.all().size} layouts", Icons.Filled.GridView, Modifier.weight(1f), actions.onNewGame)
+                    BigAction("Quick play", "Random layout", Icons.Filled.Shuffle, Modifier.weight(1f), actions.onQuickPlay)
                 }
-
-                DailyCard(stats, onDaily)
-
+            }
+            val secondary: @Composable () -> Unit = {
+                DailyCard(stats, actions.onDaily)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    SmallAction("Stats", Icons.Filled.Insights, Modifier.weight(1f), onStats)
-                    SmallAction("Awards", Icons.Filled.EmojiEvents, Modifier.weight(1f), onAchievements)
+                    SmallAction("Stats", Icons.Filled.Insights, Modifier.weight(1f), actions.onStats)
+                    SmallAction("Awards", Icons.Filled.EmojiEvents, Modifier.weight(1f), actions.onAchievements)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    SmallAction("Settings", Icons.Filled.Settings, Modifier.weight(1f), onSettings)
-                    SmallAction("How to play", Icons.AutoMirrored.Filled.HelpOutline, Modifier.weight(1f), onHelp)
+                    SmallAction("Settings", Icons.Filled.Settings, Modifier.weight(1f), actions.onSettings)
+                    SmallAction("How to play", Icons.AutoMirrored.Filled.HelpOutline, Modifier.weight(1f), actions.onHelp)
                 }
-
                 if (stats.gamesWon > 0) {
                     Text(
                         "${stats.gamesWon} wins · best streak ${stats.bestStreak} · ${stats.achievements.size} awards",
@@ -164,14 +145,118 @@ fun HomeScreen(
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
                 }
-                Spacer(Modifier.navigationBarsPadding())
+            }
+            if (wide) {
+                // Two panes: the hero and main actions on the left; daily, progress and
+                // shortcuts on the right. Centred vertically, scrolling only when needed.
+                val viewport = maxHeight
+                Box(
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    Row(
+                        Modifier
+                            .widthIn(max = 1120.dp)
+                            .fillMaxWidth()
+                            .heightIn(min = viewport)
+                            .padding(horizontal = 32.dp, vertical = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(32.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1.1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Header(settings, large = true)
+                            primary()
+                        }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            secondary()
+                            ProgressCard(stats)
+                        }
+                    }
+                }
+            } else {
+                Column(
+                    Modifier
+                        .widthIn(max = 640.dp)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Header(settings)
+                    primary()
+                    secondary()
+                    Spacer(Modifier.navigationBarsPadding())
+                }
+            }
+        }
+    }
+}
+
+/** Compact progress overview for wide home screens. */
+@Composable
+private fun ProgressCard(stats: Stats) {
+    androidx.compose.material3.Card {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Your progress", style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.ezmanw.mathong.ui.stats.StatTile("Won", stats.gamesWon.toString(), Modifier.weight(1f))
+                com.ezmanw.mathong.ui.stats.StatTile("Streak", stats.currentStreak.toString(), Modifier.weight(1f))
+                com.ezmanw.mathong.ui.stats.StatTile("Pairs", stats.totalMatches.toString(), Modifier.weight(1f))
+            }
+            com.ezmanw.mathong.ui.stats.PaceChart(stats.recent)
+        }
+    }
+}
+
+@Composable
+private fun TutorialCard(actions: HomeActions) {
+    OutlinedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text("New to Mahjong Solitaire?", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Match pairs of identical free tiles to clear the board. A tile is free when nothing sits on top of it and its left or right side is open.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = actions.onDismissTutorial) { Text("Got it") }
+                TextButton(onClick = actions.onTutorial) { Text("Try the tutorial") }
             }
         }
     }
 }
 
 @Composable
-private fun Header(settings: Settings) {
+private fun ContinueCard(g: SavedGame, onContinue: () -> Unit) {
+    val layout = LayoutRegistry.byId(g.layoutId)
+    val left = g.present.count { it }
+    ElevatedCard(
+        onClick = onContinue,
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+    ) {
+        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Continue", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Text(
+                    (if (g.daily != null) "Daily · " else if (g.mode != com.ezmanw.mathong.data.GameMode.CLASSIC) "${g.mode.label} · " else "") + "${layout.name} · ${left / 2} pairs left · ${formatTime(g.elapsedMs)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Spacer(Modifier.height(8.dp))
+                androidx.compose.material3.LinearProgressIndicator(
+                    progress = { 1f - left.toFloat() / layout.size },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Spacer(Modifier.width(16.dp))
+            Icon(Icons.Filled.PlayArrow, null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+        }
+    }
+}
+
+@Composable
+private fun Header(settings: Settings, large: Boolean = false) {
     val bob by rememberInfiniteTransition(label = "bob").animateFloat(
         -1f, 1f, infiniteRepeatable(tween(1800), RepeatMode.Reverse), label = "b",
     )
@@ -181,7 +266,7 @@ private fun Header(settings: Settings) {
             val tiles = listOf(TileKind(31), TileKind(0), TileKind(32), TileKind(9), TileKind(27))
             tiles.forEachIndexed { i, k ->
                 TilePreview(
-                    k, tileStyle, 46.dp,
+                    k, tileStyle, if (large) 64.dp else 46.dp,
                     modifier = Modifier.graphicsLayer {
                         rotationZ = (i - 2) * 6f
                         translationY = ((if (i % 2 == 0) bob else -bob) * 4f - kotlin.math.abs(i - 2) * -6f).dp.toPx()
@@ -190,7 +275,7 @@ private fun Header(settings: Settings) {
             }
         }
         Spacer(Modifier.height(16.dp))
-        Text("Mathong", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary)
+        Text("Mathong", style = if (large) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary)
         Text("Mahjong Solitaire", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

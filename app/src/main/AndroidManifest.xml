@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Playable with a mouse/trackpad and keyboard (ChromeOS, DeX, desktop windowing). -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.faketouch" android:required="false" />
     <application
         android:name=".MathongApp"
         android:allowBackup="true"
@@ -13,8 +17,16 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"
+            android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation|smallestScreenSize|uiMode"
+            android:resizeableActivity="true"
             android:windowSoftInputMode="adjustResize">
+            <!-- Default window size when launched in a desktop / freeform window. -->
+            <layout
+                android:defaultWidth="1180dp"
+                android:defaultHeight="800dp"
+                android:gravity="center"
+                android:minWidth="360dp"
+                android:minHeight="480dp" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

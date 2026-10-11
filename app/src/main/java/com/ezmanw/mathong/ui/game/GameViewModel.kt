@@ -14,6 +14,7 @@ import com.ezmanw.mathong.data.RecentGame
 import com.ezmanw.mathong.data.SavedGame
 import com.ezmanw.mathong.data.SavedMove
 import com.ezmanw.mathong.game.Board
+import com.ezmanw.mathong.game.canAutoFinish
 import com.ezmanw.mathong.game.Generator
 import com.ezmanw.mathong.game.Layout
 import com.ezmanw.mathong.game.LayoutRegistry
@@ -489,8 +490,7 @@ class GameViewModel(app: Application, savedState: SavedStateHandle) : AndroidVie
     }
 
     /** True when every remaining tile is free, so the rest of the game can be played automatically. */
-    fun canAutoFinish(board: Board?): Boolean =
-        board != null && !board.isCleared && (0 until board.layout.size).all { !board.present[it] || board.isFree(it) }
+    fun canAutoFinish(board: Board?): Boolean = board?.canAutoFinish() == true
 
     private var autoJob: Job? = null
 

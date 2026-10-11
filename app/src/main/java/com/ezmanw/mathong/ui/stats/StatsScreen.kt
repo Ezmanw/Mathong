@@ -3,6 +3,9 @@ package com.ezmanw.mathong.ui.stats
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -62,14 +65,8 @@ fun StatsScreen(onBack: () -> Unit) {
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
         topBar = { BackTopBar("Statistics", onBack, scroll) },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
-            Column(
-                Modifier
-                    .widthIn(max = 640.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
+            val overview: @Composable ColumnScope.() -> Unit = {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     StatTile("Played", stats.gamesPlayed.toString(), Modifier.weight(1f))
                     StatTile("Won", stats.gamesWon.toString(), Modifier.weight(1f))
@@ -98,6 +95,8 @@ fun StatsScreen(onBack: () -> Unit) {
                 Text("Daily challenges", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
                 DailyCalendar(stats.dailyCompleted)
 
+            }
+            val layouts: @Composable ColumnScope.() -> Unit = {
                 Text("Layouts", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
                 Card {
                     Column(Modifier.padding(vertical = 8.dp)) {
@@ -123,7 +122,38 @@ fun StatsScreen(onBack: () -> Unit) {
                     Icon(Icons.Filled.DeleteOutline, null)
                     Text("  Reset statistics")
                 }
-                Spacer(Modifier.height(24.dp))
+            }
+            if (maxWidth >= 840.dp) {
+                // Wide windows: overview on the left, per-layout table on the right.
+                Row(
+                    Modifier.widthIn(max = 1200.dp).fillMaxSize().padding(horizontal = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                ) {
+                    Column(
+                        Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        content = overview,
+                    )
+                    Column(
+                        Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        layouts()
+                        Spacer(Modifier.height(24.dp))
+                    }
+                }
+            } else {
+                Column(
+                    Modifier
+                        .widthIn(max = 640.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    overview()
+                    layouts()
+                    Spacer(Modifier.height(24.dp))
+                }
             }
         }
     }

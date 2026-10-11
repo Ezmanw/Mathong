@@ -1,5 +1,15 @@
-## Mathong v1.8 — Mahjong Solitaire
+## Mathong v1.9 — Mahjong Solitaire
 
+### Tablets, foldables, ChromeOS & desktop
+- **Adaptive layouts** that respond live as you resize the window
+  - Wide game screen with a side panel: big timer, score, pairs, moves, progress and labelled actions
+  - Two-pane home screen with a progress card and pace chart; two-column statistics; achievements grid
+  - Tiles grow with the screen but are capped so they never balloon on large monitors
+- **Mouse**: hover lifts tiles with a hand cursor, scroll wheel zooms toward the pointer, right-click inspects a tile, tooltips on every icon button
+- **Keyboard**: arrow keys + Enter to play without a mouse, Esc to deselect, H hint, S shuffle, F finish, Ctrl+Z / Ctrl+Y undo & redo, Space pause, N new game, + / − / 0 zoom, ? for the full list
+- Installs on devices without a touchscreen, resizes freely in multi-window and desktop windowing, opens at a sensible default window size, and no longer restarts when a keyboard is attached
+
+### From v1.8
 ### Fix
 - **Tiles were drawn about a third too large** in v1.6 and v1.7 when *Fast tile rendering* was on (the default). The tile cache now draws tiles at exactly the right size; a new screenshot test checks it pixel for pixel against normal drawing.
 

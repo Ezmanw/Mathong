@@ -78,6 +78,25 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ezmanw.mathong.data.BoardBackground
 import com.ezmanw.mathong.data.GameMode
+import com.ezmanw.mathong.data.Settings
+import com.ezmanw.mathong.game.Direction
+import com.ezmanw.mathong.game.canAutoFinish
+import com.ezmanw.mathong.game.moveCursor
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.unit.Dp
+import androidx.compose.material3.PlainTooltip
 import kotlinx.coroutines.delay
 
 fun formatTime(ms: Long): String {
@@ -100,7 +119,25 @@ fun boardBrush(bg: BoardBackground): Brush {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Everything the game UI can ask the game to do. */
+class GameActions(
+    val tap: (Int) -> Unit = {},
+    val undo: () -> Unit = {},
+    val redo: () -> Unit = {},
+    val shuffle: () -> Unit = {},
+    val hint: () -> Unit = {},
+    val pause: () -> Unit = {},
+    val resume: () -> Unit = {},
+    val newGame: () -> Unit = {},
+    val restart: () -> Unit = {},
+    val autoFinish: () -> Unit = {},
+    val consumeAchievements: () -> Unit = {},
+    val back: () -> Unit = {},
+    val chooseLayout: () -> Unit = {},
+    val help: () -> Unit = {},
+    val settings: () -> Unit = {},
+)
+
 @Composable
 fun GameScreen(
     onBack: () -> Unit,
@@ -117,12 +154,21 @@ fun GameScreen(
     val snackbar = remember { SnackbarHostState() }
     var comboText by remember { mutableStateOf<String?>(null) }
     var comboKey by remember { mutableStateOf(0) }
-    var menuOpen by remember { mutableStateOf(false) }
-    var confirmNew by remember { mutableStateOf(false) }
-    var inspect by remember { mutableStateOf<Int?>(null) }
+
+    val back by rememberUpdatedState(onBack)
+    val chooseLayout by rememberUpdatedState(onChooseLayout)
+    val help by rememberUpdatedState(onHelp)
+    val openSettings by rememberUpdatedState(onSettings)
     // Stable callbacks so timer ticks don't recompose and redraw the board.
-    val onTileTap = remember(vm) { { i: Int -> inspect = null; vm.tapTile(i) } }
-    val onTileLongPress = remember { { i: Int -> inspect = i } }
+    val actions = remember(vm) {
+        GameActions(
+            tap = vm::tapTile, undo = vm::undo, redo = vm::redo, shuffle = { vm.shuffle() }, hint = vm::hint,
+            pause = { vm.pause() }, resume = { vm.resume() }, newGame = { vm.newGame() }, restart = vm::restart,
+            autoFinish = vm::autoFinish, consumeAchievements = { vm.consumeAchievements() },
+            back = { back() }, chooseLayout = { chooseLayout() },
+            help = { vm.pause(); help() }, settings = { vm.pause(); openSettings() },
+        )
+    }
 
     DisposableEffect(view) {
         view.keepScreenOn = true
@@ -157,35 +203,181 @@ fun GameScreen(
         }
     }
 
+    GameContent(state, settings, actions, snackbar, comboText, comboKey)
+}
+
+/** Window shape the game UI adapts to. */
+enum class GameLayoutMode { PHONE, LANDSCAPE_RAIL, WIDE }
+
+fun gameLayoutMode(width: Dp, height: Dp): GameLayoutMode = when {
+    width >= 840.dp && height >= 480.dp -> GameLayoutMode.WIDE
+    width > height && height < 600.dp -> GameLayoutMode.LANDSCAPE_RAIL
+    else -> GameLayoutMode.PHONE
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GameContent(
+    state: GameUiState,
+    settings: Settings,
+    actions: GameActions,
+    snackbar: SnackbarHostState = remember { SnackbarHostState() },
+    comboText: String? = null,
+    comboKey: Int = 0,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    var confirmNew by remember { mutableStateOf(false) }
+    var shortcutsOpen by remember { mutableStateOf(false) }
+    var inspect by remember { mutableStateOf<Int?>(null) }
+    var cursor by remember { mutableStateOf<Int?>(null) }
+    val zoom = rememberBoardZoom()
+    val focus = remember { FocusRequester() }
+    val onTileTap = remember(actions) { { i: Int -> inspect = null; cursor = null; actions.tap(i) } }
+    val onTileLongPress = remember { { i: Int -> inspect = i } }
+    val canFinish = remember(state.board) { state.board?.canAutoFinish() == true }
+
     val title = when {
         state.daily != null -> "Daily Challenge"
         state.mode != GameMode.CLASSIC -> "${state.layout?.name ?: ""} · ${state.mode.label}"
         else -> state.layout?.name ?: ""
     }
     val paused = state.status == GameStatus.PAUSED
+    val playing = state.status == GameStatus.PLAYING || paused
+
+    // Keep keyboard focus on the game whenever no dialog is open.
+    LaunchedEffect(state.status, confirmNew, shortcutsOpen) {
+        if (!confirmNew && !shortcutsOpen) runCatching { focus.requestFocus() }
+    }
+
+    fun onKey(e: KeyEvent): Boolean {
+        if (e.type != KeyEventType.KeyDown) return false
+        val ctrl = e.isCtrlPressed || e.isMetaPressed
+        val board = state.board
+        when {
+            ctrl && e.key == Key.Z && !e.isShiftPressed -> actions.undo()
+            ctrl && (e.key == Key.Y || (e.key == Key.Z && e.isShiftPressed)) -> actions.redo()
+            ctrl -> return false
+            e.key == Key.Slash && e.isShiftPressed || e.key == Key.F1 -> shortcutsOpen = true
+            !playing -> return false
+            e.key == Key.H -> actions.hint()
+            e.key == Key.S -> actions.shuffle()
+            e.key == Key.Spacebar || e.key == Key.P -> if (paused) actions.resume() else actions.pause()
+            e.key == Key.N -> confirmNew = true
+            e.key == Key.F && canFinish -> actions.autoFinish()
+            e.key == Key.Escape -> {
+                when {
+                    inspect != null -> inspect = null
+                    state.selected != null -> actions.tap(state.selected)
+                    cursor != null -> cursor = null
+                    else -> return false
+                }
+            }
+            e.key == Key.DirectionLeft || e.key == Key.DirectionRight || e.key == Key.DirectionUp || e.key == Key.DirectionDown -> {
+                if (board == null || paused) return false
+                val dir = when (e.key) {
+                    Key.DirectionLeft -> Direction.LEFT
+                    Key.DirectionRight -> Direction.RIGHT
+                    Key.DirectionUp -> Direction.UP
+                    else -> Direction.DOWN
+                }
+                cursor = board.moveCursor(cursor, dir)
+            }
+            e.key == Key.Enter || e.key == Key.NumPadEnter -> cursor?.let(actions.tap) ?: return false
+            e.key == Key.Equals || e.key == Key.Plus || e.key == Key.NumPadAdd -> zoom.apply(1.25f)
+            e.key == Key.Minus || e.key == Key.NumPadSubtract -> zoom.apply(0.8f)
+            e.key == Key.Zero || e.key == Key.NumPad0 -> zoom.reset()
+            else -> return false
+        }
+        return true
+    }
+
     val menu: @Composable () -> Unit = {
         Box {
-            IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, "More") }
+            TipIconButton(Icons.Filled.MoreVert, "More") { menuOpen = true }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                DropdownMenuItem(text = { Text("New game") }, onClick = { menuOpen = false; confirmNew = true })
-                DropdownMenuItem(text = { Text("Restart this deal") }, onClick = { menuOpen = false; vm.restart() })
-                DropdownMenuItem(text = { Text("Change layout") }, onClick = { menuOpen = false; onChooseLayout() })
-                DropdownMenuItem(text = { Text("How to play") }, onClick = { menuOpen = false; vm.pause(); onHelp() })
-                DropdownMenuItem(text = { Text("Settings") }, onClick = { menuOpen = false; vm.pause(); onSettings() })
+                DropdownMenuItem(text = { Text("New game") }, onClick = { menuOpen = false; confirmNew = true }, trailingIcon = { ShortcutLabel("N") })
+                DropdownMenuItem(text = { Text("Restart this deal") }, onClick = { menuOpen = false; actions.restart() })
+                DropdownMenuItem(text = { Text("Change layout") }, onClick = { menuOpen = false; actions.chooseLayout() })
+                DropdownMenuItem(text = { Text("Keyboard shortcuts") }, onClick = { menuOpen = false; shortcutsOpen = true }, trailingIcon = { ShortcutLabel("?") })
+                DropdownMenuItem(text = { Text("How to play") }, onClick = { menuOpen = false; actions.help() })
+                DropdownMenuItem(text = { Text("Settings") }, onClick = { menuOpen = false; actions.settings() })
             }
         }
     }
     val pauseButton: @Composable () -> Unit = {
-        IconButton(onClick = { if (paused) vm.resume() else vm.pause() }) {
-            Icon(if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause, if (paused) "Resume" else "Pause")
+        TipIconButton(
+            if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+            if (paused) "Resume" else "Pause", "Space",
+        ) { if (paused) actions.resume() else actions.pause() }
+    }
+    val backButton: @Composable () -> Unit = {
+        TipIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Back") { actions.back() }
+    }
+    val onDarkBg = settings.background in setOf(BoardBackground.FELT, BoardBackground.WOOD, BoardBackground.NIGHT)
+
+    @Composable
+    fun BoardArea(modifier: Modifier, hud: Boolean, hudTitle: String?, finishFab: Boolean) {
+        Box(modifier.background(boardBrush(settings.background))) {
+            Column(Modifier.fillMaxSize()) {
+                if (hud) Hud(state, settings.showTimer, onDarkBg = onDarkBg, title = hudTitle)
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    if (!paused) {
+                        state.board?.let { b ->
+                            BoardView(
+                                board = b,
+                                selected = state.selected,
+                                hint = state.hint,
+                                shakeTile = state.shakeTile,
+                                shakeKey = state.shakeKey,
+                                settings = settings,
+                                dealId = state.dealId,
+                                onTap = onTileTap,
+                                onLongPress = onTileLongPress,
+                                zoomState = zoom,
+                                cursor = cursor,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
+                    ComboPopup(comboText, comboKey, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
+                    state.board?.let { b ->
+                        TileInspector(b, inspect, settings, onDismiss = { inspect = null }, Modifier.align(Alignment.BottomStart).padding(12.dp))
+                    }
+                    if (finishFab) {
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = canFinish && state.status == GameStatus.PLAYING,
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+                            enter = fadeIn() + scaleIn(),
+                            exit = fadeOut() + scaleOut(),
+                        ) {
+                            androidx.compose.material3.ExtendedFloatingActionButton(
+                                onClick = actions.autoFinish,
+                                icon = { Icon(Icons.Filled.DoneAll, null) },
+                                text = { Text("Finish") },
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            )
+                        }
+                    }
+                }
+            }
+            if (paused) PausedOverlay(actions.resume)
+            if (state.status == GameStatus.LOADING) {
+                Text("Dealing…", Modifier.align(Alignment.Center), style = MaterialTheme.typography.titleMedium)
+            }
         }
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val landscape = maxWidth > maxHeight && maxHeight < 600.dp
+    BoxWithConstraints(
+        Modifier
+            .fillMaxSize()
+            .onPreviewKeyEvent(::onKey)
+            .focusRequester(focus)
+            .focusable(),
+    ) {
+        val mode = gameLayoutMode(maxWidth, maxHeight)
         Scaffold(
             topBar = {
-                if (!landscape) {
+                if (mode == GameLayoutMode.PHONE) {
                     TopAppBar(
                         title = {
                             Column {
@@ -199,24 +391,22 @@ fun GameScreen(
                                 }
                             }
                         },
-                        navigationIcon = {
-                            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-                        },
+                        navigationIcon = { backButton() },
                         actions = { pauseButton(); menu() },
                         colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
                     )
                 }
             },
             bottomBar = {
-                if (!landscape) {
+                if (mode == GameLayoutMode.PHONE) {
                     BottomAppBar(
                         actions = {
-                            ToolButton(Icons.AutoMirrored.Filled.Undo, "Undo", state.history.isNotEmpty()) { vm.undo() }
-                            ToolButton(Icons.AutoMirrored.Filled.Redo, "Redo", state.redo.isNotEmpty()) { vm.redo() }
-                            ToolButton(Icons.Filled.Shuffle, "Shuffle", state.status != GameStatus.WON) { vm.shuffle() }
+                            TipIconButton(Icons.AutoMirrored.Filled.Undo, "Undo", "Ctrl+Z", state.history.isNotEmpty(), actions.undo)
+                            TipIconButton(Icons.AutoMirrored.Filled.Redo, "Redo", "Ctrl+Y", state.redo.isNotEmpty(), actions.redo)
+                            TipIconButton(Icons.Filled.Shuffle, "Shuffle", "S", state.status != GameStatus.WON, actions.shuffle)
                         },
                         floatingActionButton = {
-                            FloatingActionButton(onClick = { vm.hint() }) { Icon(Icons.Filled.Lightbulb, "Hint") }
+                            FloatingActionButton(onClick = actions.hint) { Icon(Icons.Filled.Lightbulb, "Hint") }
                         },
                     )
                 }
@@ -224,77 +414,39 @@ fun GameScreen(
             snackbarHost = { SnackbarHost(snackbar) },
         ) { padding ->
             Row(Modifier.padding(padding).fillMaxSize()) {
-                if (landscape) {
-                    NavigationRail(
-                        header = {
-                            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-                            pauseButton()
-                            menu()
-                        },
-                    ) {
-                        Spacer(Modifier.weight(1f))
-                        ToolButton(Icons.AutoMirrored.Filled.Undo, "Undo", state.history.isNotEmpty()) { vm.undo() }
-                        ToolButton(Icons.AutoMirrored.Filled.Redo, "Redo", state.redo.isNotEmpty()) { vm.redo() }
-                        ToolButton(Icons.Filled.Shuffle, "Shuffle", state.status != GameStatus.WON) { vm.shuffle() }
-                        Spacer(Modifier.height(8.dp))
-                        FloatingActionButton(onClick = { vm.hint() }, Modifier.padding(bottom = 12.dp)) {
-                            Icon(Icons.Filled.Lightbulb, "Hint")
+                when (mode) {
+                    GameLayoutMode.LANDSCAPE_RAIL -> {
+                        NavigationRail(
+                            header = {
+                                backButton()
+                                pauseButton()
+                                menu()
+                            },
+                        ) {
+                            Spacer(Modifier.weight(1f))
+                            TipIconButton(Icons.AutoMirrored.Filled.Undo, "Undo", "Ctrl+Z", state.history.isNotEmpty(), actions.undo)
+                            TipIconButton(Icons.AutoMirrored.Filled.Redo, "Redo", "Ctrl+Y", state.redo.isNotEmpty(), actions.redo)
+                            TipIconButton(Icons.Filled.Shuffle, "Shuffle", "S", state.status != GameStatus.WON, actions.shuffle)
+                            Spacer(Modifier.height(8.dp))
+                            FloatingActionButton(onClick = actions.hint, Modifier.padding(bottom = 12.dp)) {
+                                Icon(Icons.Filled.Lightbulb, "Hint")
+                            }
                         }
+                        BoardArea(Modifier.weight(1f).fillMaxHeight(), hud = true, hudTitle = title, finishFab = true)
                     }
-                }
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .background(boardBrush(settings.background))
-                ) {
-                    Column(Modifier.fillMaxSize()) {
-                        Hud(
-                            state, settings.showTimer,
-                            onDarkBg = settings.background in setOf(BoardBackground.FELT, BoardBackground.WOOD, BoardBackground.NIGHT),
-                            title = if (landscape) title else null,
+                    GameLayoutMode.WIDE -> {
+                        BoardArea(Modifier.weight(1f).fillMaxHeight(), hud = false, hudTitle = null, finishFab = false)
+                        GameSidePanel(
+                            state = state,
+                            settings = settings,
+                            title = title,
+                            canFinish = canFinish,
+                            actions = actions,
+                            topBar = { backButton(); Spacer(Modifier.weight(1f)); pauseButton(); menu() },
+                            onShortcuts = { shortcutsOpen = true },
                         )
-                        Box(Modifier.weight(1f).fillMaxWidth()) {
-                            if (!paused) {
-                                state.board?.let { b ->
-                                    BoardView(
-                                        board = b,
-                                        selected = state.selected,
-                                        hint = state.hint,
-                                        shakeTile = state.shakeTile,
-                                        shakeKey = state.shakeKey,
-                                        settings = settings,
-                                        dealId = state.dealId,
-                                        onTap = onTileTap,
-                                        onLongPress = onTileLongPress,
-                                        modifier = Modifier.fillMaxSize(),
-                                    )
-                                }
-                            }
-                            ComboPopup(comboText, comboKey, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
-                            state.board?.let { b ->
-                                TileInspector(b, inspect, settings, onDismiss = { inspect = null }, Modifier.align(Alignment.BottomStart).padding(12.dp))
-                            }
-                            val canFinish = remember(state.board) { vm.canAutoFinish(state.board) }
-                            androidx.compose.animation.AnimatedVisibility(
-                                visible = canFinish && state.status == GameStatus.PLAYING,
-                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
-                                enter = fadeIn() + scaleIn(),
-                                exit = fadeOut() + scaleOut(),
-                            ) {
-                                androidx.compose.material3.ExtendedFloatingActionButton(
-                                    onClick = { vm.autoFinish() },
-                                    icon = { Icon(Icons.Filled.DoneAll, null) },
-                                    text = { Text("Finish") },
-                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                )
-                            }
-                        }
                     }
-                    if (paused) PausedOverlay { vm.resume() }
-                    if (state.status == GameStatus.LOADING) {
-                        Text("Dealing…", Modifier.align(Alignment.Center), style = MaterialTheme.typography.titleMedium)
-                    }
+                    GameLayoutMode.PHONE -> BoardArea(Modifier.weight(1f).fillMaxHeight(), hud = true, hudTitle = null, finishFab = true)
                 }
             }
         }
@@ -305,11 +457,11 @@ fun GameScreen(
             onDismissRequest = {},
             title = { Text("No more moves") },
             text = { Text("There are no matching free pairs left. Shuffle the remaining tiles, undo your last move or start over.") },
-            confirmButton = { TextButton(onClick = { vm.shuffle() }) { Text("Shuffle") } },
+            confirmButton = { TextButton(onClick = actions.shuffle) { Text("Shuffle") } },
             dismissButton = {
                 Row {
-                    if (state.history.isNotEmpty()) TextButton(onClick = { vm.undo() }) { Text("Undo") }
-                    TextButton(onClick = { vm.newGame() }) { Text("New game") }
+                    if (state.history.isNotEmpty()) TextButton(onClick = actions.undo) { Text("Undo") }
+                    TextButton(onClick = actions.newGame) { Text("New game") }
                 }
             },
         )
@@ -324,11 +476,11 @@ fun GameScreen(
                 val left = (state.board?.remaining ?: 0) / 2
                 Text("You ran out of time with $left pair${if (left == 1) "" else "s"} left. Match quickly to earn more time — combos add bonus seconds.")
             },
-            confirmButton = { TextButton(onClick = { vm.restart() }) { Text("Try again") } },
+            confirmButton = { TextButton(onClick = actions.restart) { Text("Try again") } },
             dismissButton = {
                 Row {
-                    TextButton(onClick = { vm.newGame() }) { Text("New deal") }
-                    TextButton(onClick = onBack) { Text("Home") }
+                    TextButton(onClick = actions.newGame) { Text("New deal") }
+                    TextButton(onClick = actions.back) { Text("Home") }
                 }
             },
         )
@@ -339,25 +491,208 @@ fun GameScreen(
             onDismissRequest = { confirmNew = false },
             title = { Text("Start a new game?") },
             text = { Text("Your current progress on this deal will be lost.") },
-            confirmButton = { TextButton(onClick = { confirmNew = false; vm.newGame() }) { Text("New game") } },
+            confirmButton = { TextButton(onClick = { confirmNew = false; actions.newGame() }) { Text("New game") } },
             dismissButton = { TextButton(onClick = { confirmNew = false }) { Text("Cancel") } },
         )
     }
 
+    if (shortcutsOpen) ShortcutsDialog { shortcutsOpen = false }
+
     if (state.status == GameStatus.WON && state.result != null) {
         WinDialog(
             state = state,
-            onNext = { vm.newGame() },
-            onLayouts = onChooseLayout,
-            onHome = onBack,
-            onAchievementsShown = { vm.consumeAchievements() },
+            onNext = actions.newGame,
+            onLayouts = actions.chooseLayout,
+            onHome = actions.back,
+            onAchievementsShown = actions.consumeAchievements,
         )
     }
 }
 
+/** Icon button with a Material tooltip (shown on hover with a mouse, long-press on touch). */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ToolButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
-    IconButton(onClick = onClick, enabled = enabled) { Icon(icon, label) }
+fun TipIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    shortcut: String? = null,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    androidx.compose.material3.TooltipBox(
+        positionProvider = androidx.compose.material3.TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        tooltip = { PlainTooltip { Text(if (shortcut != null) "$label ($shortcut)" else label) } },
+        state = androidx.compose.material3.rememberTooltipState(),
+    ) {
+        IconButton(onClick = onClick, enabled = enabled) { Icon(icon, label) }
+    }
+}
+
+@Composable
+private fun ShortcutLabel(text: String) {
+    Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceContainerHighest) {
+        Text(
+            text,
+            Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Side panel for wide windows (tablets, foldables, ChromeOS and desktop). */
+@Composable
+private fun GameSidePanel(
+    state: GameUiState,
+    settings: Settings,
+    title: String,
+    canFinish: Boolean,
+    actions: GameActions,
+    topBar: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
+    onShortcuts: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val board = state.board
+    val remaining = remember(board) { board?.remaining ?: 0 }
+    val moves = remember(board) { board?.availableMatches()?.size ?: 0 }
+    val total = board?.layout?.size ?: 1
+    Surface(color = cs.surfaceContainerLow, modifier = Modifier.width(320.dp).fillMaxHeight()) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, content = topBar)
+            Spacer(Modifier.height(12.dp))
+            Text(title, style = MaterialTheme.typography.headlineSmall)
+            Text(
+                when {
+                    state.daily != null -> "${state.daily} · ${state.layout?.name ?: ""}"
+                    else -> board?.layout?.let { "${it.size} tiles · ${it.maxZ + 1} layers" } ?: ""
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = cs.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(24.dp))
+            when (state.mode) {
+                GameMode.ZEN -> Text("Zen", style = MaterialTheme.typography.displaySmall, color = cs.primary)
+                GameMode.TIME_ATTACK -> {
+                    Text("Time left", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+                    Text(
+                        formatTime(state.timeLeftMs + 999),
+                        style = MaterialTheme.typography.displayMedium,
+                        color = if (state.timeLeftMs < 10_000) cs.error else cs.onSurface,
+                    )
+                }
+                GameMode.CLASSIC -> if (settings.showTimer) {
+                    Text("Time", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+                    Text(formatTime(state.elapsedMs), style = MaterialTheme.typography.displayMedium)
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (state.mode != GameMode.ZEN) PanelStat("Score", state.score.toString(), Modifier.weight(1f))
+                PanelStat("Pairs", (remaining / 2).toString(), Modifier.weight(1f))
+                PanelStat("Moves", moves.toString(), Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(16.dp))
+            androidx.compose.material3.LinearProgressIndicator(
+                progress = { 1f - remaining.toFloat() / total },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                "${((1f - remaining.toFloat() / total) * 100).toInt()}% cleared",
+                Modifier.padding(top = 6.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = cs.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(24.dp))
+            val live = state.status == GameStatus.PLAYING || state.status == GameStatus.PAUSED
+            androidx.compose.material3.Button(onClick = actions.hint, enabled = live, modifier = Modifier.fillMaxWidth()) {
+                PanelButtonContent(Icons.Filled.Lightbulb, "Hint", "H")
+            }
+            Spacer(Modifier.height(8.dp))
+            FilledTonalButton(onClick = actions.undo, enabled = state.history.isNotEmpty() && live, modifier = Modifier.fillMaxWidth()) {
+                PanelButtonContent(Icons.AutoMirrored.Filled.Undo, "Undo", "Ctrl+Z")
+            }
+            Spacer(Modifier.height(8.dp))
+            FilledTonalButton(onClick = actions.redo, enabled = state.redo.isNotEmpty() && live, modifier = Modifier.fillMaxWidth()) {
+                PanelButtonContent(Icons.AutoMirrored.Filled.Redo, "Redo", "Ctrl+Y")
+            }
+            Spacer(Modifier.height(8.dp))
+            FilledTonalButton(onClick = actions.shuffle, enabled = live, modifier = Modifier.fillMaxWidth()) {
+                PanelButtonContent(Icons.Filled.Shuffle, "Shuffle", "S")
+            }
+            if (canFinish && state.status == GameStatus.PLAYING) {
+                Spacer(Modifier.height(8.dp))
+                androidx.compose.material3.Button(
+                    onClick = actions.autoFinish,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = cs.tertiary, contentColor = cs.onTertiary),
+                ) { PanelButtonContent(Icons.Filled.DoneAll, "Finish", "F") }
+            }
+            Spacer(Modifier.height(16.dp))
+            TextButton(onClick = onShortcuts) { Text("Keyboard shortcuts") }
+        }
+    }
+}
+
+@Composable
+private fun PanelStat(label: String, value: String, modifier: Modifier) {
+    Surface(modifier, shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Column(Modifier.padding(12.dp)) {
+            Text(value, style = MaterialTheme.typography.titleLarge)
+            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.PanelButtonContent(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    shortcut: String,
+) {
+    Icon(icon, null, Modifier.size(18.dp))
+    Spacer(Modifier.width(8.dp))
+    Text(label, Modifier.weight(1f))
+    Text(shortcut, style = MaterialTheme.typography.labelSmall, modifier = Modifier.graphicsLayer { alpha = 0.7f })
+}
+
+@Composable
+private fun ShortcutsDialog(onDismiss: () -> Unit) {
+    val rows = listOf(
+        "Arrow keys" to "Move between tiles",
+        "Enter" to "Select tile",
+        "Esc" to "Deselect",
+        "H" to "Hint",
+        "S" to "Shuffle",
+        "F" to "Finish (when all tiles are free)",
+        "Ctrl+Z" to "Undo",
+        "Ctrl+Y / Ctrl+Shift+Z" to "Redo",
+        "Space / P" to "Pause or resume",
+        "N" to "New game",
+        "+ / − / 0" to "Zoom in, out, reset",
+        "Scroll wheel" to "Zoom toward the pointer",
+        "Right-click" to "Inspect a tile",
+        "?" to "Show this list",
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Keyboard & mouse") },
+        text = {
+            Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                rows.forEach { (k, v) ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.width(150.dp)) { ShortcutLabel(k) }
+                        Text(v, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
 }
 
 @Composable
